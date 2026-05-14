@@ -1,28 +1,10 @@
 import Link from "next/link";
 import { ActivityChart } from "@/components/activity-chart";
+import { MetricStrip } from "@/components/metric-strip";
 import { RepoList } from "@/components/repo-list";
 import { ShareButton } from "@/components/share-button";
 import { formatLines, signedLines } from "@/lib/format";
-import type { PeriodSummary, StatsPayload } from "@/lib/types";
-
-function MetricStrip({ summary }: { summary: PeriodSummary }) {
-  return (
-    <div className="metrics">
-      <div className="metric">
-        <div className="metric-val">{signedLines(summary.lines)}</div>
-        <div className="metric-label">lines</div>
-      </div>
-      <div className="metric">
-        <div className="metric-val">{formatLines(summary.commits)}</div>
-        <div className="metric-label">commits</div>
-      </div>
-      <div className="metric">
-        <div className="metric-val">{formatLines(summary.prs)}</div>
-        <div className="metric-label">merged prs</div>
-      </div>
-    </div>
-  );
-}
+import type { StatsPayload } from "@/lib/types";
 
 export function StatsPage({ stats }: { stats: StatsPayload }) {
   return (
@@ -47,7 +29,11 @@ export function StatsPage({ stats }: { stats: StatsPayload }) {
       <div className="hero-num">{signedLines(stats.today.lines)}</div>
       <div className="hero-sub">lines shipped today</div>
 
-      <MetricStrip summary={stats.today} />
+      <MetricStrip
+        lines={stats.today.lines}
+        commits={stats.today.commits}
+        prs={stats.today.prs}
+      />
 
       <section className="section">
         <h2 className="section-head">last 7 days</h2>
@@ -63,7 +49,11 @@ export function StatsPage({ stats }: { stats: StatsPayload }) {
         <h2 className="section-head">this week</h2>
         <div className="sub-num">+{formatLines(stats.week.lines)}</div>
         <div className="hero-sub">lines total</div>
-        <MetricStrip summary={stats.week} />
+        <MetricStrip
+          lines={stats.week.lines}
+          commits={stats.week.commits}
+          prs={stats.week.prs}
+        />
         <RepoList repos={stats.week.byRepo} limit={8} />
       </section>
 

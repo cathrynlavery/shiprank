@@ -109,6 +109,8 @@ button {
 
 .topline-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -164,12 +166,45 @@ button {
 }
 
 .row {
+  display: block;
+  border-bottom: 1px solid var(--border);
+  padding: 11px 0;
+}
+
+.row-main {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 24px;
-  border-bottom: 1px solid var(--border);
-  padding: 11px 0;
+}
+
+.row-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 0;
+  overflow: hidden;
+  padding-top: 0;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition:
+    max-height 180ms ease,
+    opacity 180ms ease,
+    padding-top 180ms ease;
+}
+
+.row-detail-sep {
+  opacity: 0.5;
+}
+
+.row-link:hover .row-detail,
+.row-link:focus-visible .row-detail {
+  max-height: 32px;
+  padding-top: 8px;
+  opacity: 1;
 }
 
 .row-link:hover .label,
@@ -252,9 +287,54 @@ button {
 .prose {
   margin: 0;
   padding: 14px 0 0;
-  max-width: 56ch;
   font-size: 13px;
   line-height: 1.55;
+}
+
+.collapsibles {
+  margin-top: 64px;
+}
+
+.collapsible {
+  padding: 0;
+}
+
+.collapsible + .collapsible {
+  margin-top: 0;
+}
+
+.collapsible summary.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  margin-top: 24px;
+  user-select: none;
+}
+
+.collapsibles > .collapsible:first-child summary.section-head {
+  margin-top: 0;
+}
+
+.collapsible summary.section-head::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible summary.section-head::after {
+  content: "+";
+  font-size: 14px;
+  line-height: 1;
+  margin-left: 16px;
+  color: var(--foreground);
+}
+
+.collapsible[open] summary.section-head::after {
+  content: "−";
+}
+
+.collapsible[open] .prose {
+  padding-bottom: 12px;
 }
 
 .metrics {
@@ -291,6 +371,10 @@ button {
   margin-top: 48px;
   font-size: 11px;
   letter-spacing: 0;
+}
+
+.contact + .contact {
+  margin-top: 8px;
 }
 
 .permalink {

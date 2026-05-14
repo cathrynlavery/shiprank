@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import { ActivityChart } from "@/components/activity-chart";
 import { AuthButton } from "@/components/auth-button";
 import { CountUp } from "@/components/count-up";
+import { MetricStrip } from "@/components/metric-strip";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { formatLines } from "@/lib/format";
 import { getAllStats } from "@/lib/store";
+import type { RepoStats, StatsPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +17,20 @@ type HomeProps = {
   }>;
 };
 
+function aggregateByDay(allStats: StatsPayload[]): StatsPayload["byDay"] {
+  const out: StatsPayload["byDay"] = {};
+  for (const stats of allStats) {
+    for (const [date, repos] of Object.entries(stats.byDay)) {
+      const bucket: RepoStats = (out[date] ??= {});
+      for (const [repoFullName, repoStats] of Object.entries(repos)) {
+        const scopedKey = `${stats.username}::${repoFullName}`;
+        bucket[scopedKey] = repoStats;
+      }
+    }
+  }
+  return out;
+}
+
 export default async function Home({ searchParams }: HomeProps) {
   const [{ range }, session, allStats] = await Promise.all([
     searchParams,
@@ -22,18 +39,30 @@ export default async function Home({ searchParams }: HomeProps) {
   ]);
   const mode = range === "week" ? "week" : "today";
   const leaderboard = allStats
-    .map((stats) => ({
-      username: stats.username,
-      total: mode === "week" ? stats.week.lines : stats.today.lines,
-      today: stats.today.lines,
-      week: stats.week.lines,
-      date: stats.today.date,
-    }))
+    .map((stats) => {
+      const period = mode === "week" ? stats.week : stats.today;
+      return {
+        username: stats.username,
+        total: period.lines,
+        commits: period.commits,
+        prs: period.prs,
+        lines: period.lines,
+        deletions: Math.max(0, period.lines - period.net),
+        date: stats.today.date,
+      };
+    })
     .sort((a, b) => b.total - a.total);
+
   const leader = leaderboard[0];
   const today = leader?.date ?? new Date().toISOString().slice(0, 10);
   const heroTotal = leaderboard.reduce((sum, entry) => sum + entry.total, 0);
+  const heroCommits = leaderboard.reduce(
+    (sum, entry) => sum + entry.commits,
+    0,
+  );
+  const heroPrs = leaderboard.reduce((sum, entry) => sum + entry.prs, 0);
   const devCount = leaderboard.length;
+  const collectiveByDay = aggregateByDay(allStats);
 
   const rangeLabel =
     mode === "week" ? "lines shipped this week" : "lines shipped today";
@@ -55,6 +84,11 @@ export default async function Home({ searchParams }: HomeProps) {
           </Link>
         </div>
         <div className="topline-actions">
+          {session?.githubUsername ? (
+            <Link className="button" href={`/${session.githubUsername}`}>
+              my stats
+            </Link>
+          ) : null}
           <ThemeToggle />
           <AuthButton session={session} />
         </div>
@@ -67,6 +101,13 @@ export default async function Home({ searchParams }: HomeProps) {
         <CountUp value={heroTotal} />
       </div>
       <div className="hero-sub">{heroSub}</div>
+
+      <MetricStrip lines={heroTotal} commits={heroCommits} prs={heroPrs} />
+
+      <section className="section">
+        <h2 className="section-head">last 7 days</h2>
+        <ActivityChart byDay={collectiveByDay} today={today} />
+      </section>
 
       <section className="section">
         <h2 className="section-head">leaderboard</h2>
@@ -86,10 +127,21 @@ export default async function Home({ searchParams }: HomeProps) {
               href={`/${entry.username}`}
               key={entry.username}
             >
-              <span className="label">
-                {String(index + 1).padStart(2, "0")} / @{entry.username}
-              </span>
-              <span className="val">+{formatLines(entry.total)}</span>
+              <div className="row-main">
+                <span className="label">
+                  {String(index + 1).padStart(2, "0")} / @{entry.username}
+                </span>
+                <span className="val">+{formatLines(entry.total)}</span>
+              </div>
+              <div className="row-detail">
+                <span>{formatLines(entry.commits)} commits</span>
+                <span className="row-detail-sep">·</span>
+                <span>{formatLines(entry.prs)} merged prs</span>
+                <span className="row-detail-sep">·</span>
+                <span>
+                  +{formatLines(entry.lines)} / −{formatLines(entry.deletions)}
+                </span>
+              </div>
             </Link>
           ))
         ) : (
@@ -97,43 +149,61 @@ export default async function Home({ searchParams }: HomeProps) {
         )}
       </section>
 
-      <section className="section">
-        <h2 className="section-head">privacy</h2>
-        <p className="prose">
-          Private repository names are never shown publicly. ShipRank only shows
-          aggregate totals on the leaderboard. On your profile, private repos
-          are replaced with deterministic anonymous names.
-        </p>
-      </section>
+      <div className="collapsibles">
+        <details className="collapsible">
+          <summary className="section-head">privacy</summary>
+          <p className="prose">
+            Private repository names are never shown publicly. ShipRank only
+            shows aggregate totals on the leaderboard. On your profile, private
+            repos are replaced with deterministic anonymous names.
+          </p>
+        </details>
 
-      <section className="section">
-        <h2 className="section-head">what we store</h2>
-        <p className="prose">
-          We store your GitHub username, OAuth token, and recent line-count
-          stats so daily refreshes can run. Tokens are used only to read your
-          repositories and commits for stats generation.
-        </p>
-      </section>
+        <details className="collapsible">
+          <summary className="section-head">what we store</summary>
+          <p className="prose">
+            We store your GitHub username, OAuth token, and recent line-count
+            stats so daily refreshes can run. Tokens are used only to read your
+            repositories and commits for stats generation.
+          </p>
+        </details>
 
-      <section className="section">
-        <h2 className="section-head">what we do not show</h2>
-        <p className="prose">
-          We do not publish private repo names, commit messages, file names,
-          code, or diffs.
-        </p>
-      </section>
+        <details className="collapsible">
+          <summary className="section-head">what we do not show</summary>
+          <p className="prose">
+            We do not publish private repo names, commit messages, file names,
+            code, or diffs.
+          </p>
+        </details>
+      </div>
 
       <p className="contact">Stats refresh daily at 08:00 UTC.</p>
       <p className="contact">
         Questions or removal requests:{" "}
         <a href="mailto:hello@shiprank.dev">hello@shiprank.dev</a>
       </p>
-
-      {session?.githubUsername ? (
-        <div className="permalink">
-          <Link href={`/${session.githubUsername}`}>your stats</Link>
-        </div>
-      ) : null}
+      <p className="contact">
+        Open source on{" "}
+        <a
+          href="https://github.com/cathrynlavery/shiprank"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          github
+        </a>
+        .
+      </p>
+      <p className="contact">
+        Made by{" "}
+        <a
+          href="https://littlemight.com"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Cathryn Lavery
+        </a>
+        .
+      </p>
     </main>
   );
 }
