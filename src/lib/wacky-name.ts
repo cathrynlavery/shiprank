@@ -1,36 +1,82 @@
 const ADJECTIVES = [
-  "Mysterious",
-  "Secret",
-  "Ancient",
+  "Stellar",
+  "Astral",
+  "Quantum",
+  "Nebular",
+  "Lunar",
+  "Solar",
+  "Plasma",
   "Cosmic",
+  "Galactic",
+  "Orbital",
+  "Warp",
+  "Hyper",
+  "Cyber",
+  "Neural",
+  "Holographic",
+  "Ion",
+  "Photon",
+  "Chrome",
+  "Crystalline",
+  "Void",
+  "Eclipse",
+  "Tachyon",
+  "Antimatter",
+  "Pulsar",
+  "Vortex",
+  "Subspace",
   "Phantom",
-  "Sneaky",
-  "Rogue",
-  "Cryptic",
-  "Velvet",
-  "Midnight",
+  "Spectral",
+  "Onyx",
+  "Sable",
 ];
 
 const NOUNS = [
-  "Penguin",
-  "Capybara",
-  "Narwhal",
-  "Axolotl",
-  "Quokka",
-  "Pangolin",
-  "Tapir",
-  "Numbat",
-  "Platypus",
-  "Wombat",
+  "Voyager",
+  "Sentinel",
+  "Nomad",
+  "Wraith",
+  "Specter",
+  "Drifter",
+  "Pilgrim",
+  "Wanderer",
+  "Outrider",
+  "Marauder",
+  "Reaver",
+  "Cipher",
+  "Architect",
+  "Mainframe",
+  "Daemon",
+  "Synth",
+  "Mecha",
+  "Quasar",
+  "Nova",
+  "Beacon",
+  "Cruiser",
+  "Frigate",
+  "Corvette",
+  "Probe",
+  "Scout",
+  "Helix",
+  "Vector",
+  "Pioneer",
+  "Oracle",
+  "Monolith",
 ];
 
-export function wackyName(repoFullName: string) {
-  let hash = 0;
-  for (const char of repoFullName) {
-    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+function fnv1a(str: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
   }
+  return hash;
+}
 
-  return `${ADJECTIVES[hash % ADJECTIVES.length]} ${
-    NOUNS[(hash >>> 4) % NOUNS.length]
-  }`;
+export function wackyName(repoFullName: string) {
+  const hash = fnv1a(repoFullName);
+  const adj = ADJECTIVES[hash % ADJECTIVES.length];
+  const noun = NOUNS[(hash >>> 5) % NOUNS.length];
+  const suffix = (hash >>> 10).toString(36).padStart(3, "0").slice(-3);
+  return `${adj} ${noun} ${suffix}`;
 }

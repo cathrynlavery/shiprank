@@ -6,18 +6,19 @@ export type RepoLineStats = {
 
 export type RepoStats = Record<string, RepoLineStats>;
 
+export type PeriodSummary = {
+  lines: number;
+  net: number;
+  commits: number;
+  prs: number;
+  byRepo: RepoStats;
+};
+
 export type StatsPayload = {
   username: string;
   generated: string;
-  today: {
-    date: string;
-    total: number;
-    byRepo: RepoStats;
-  };
-  week: {
-    total: number;
-    byRepo: RepoStats;
-  };
+  today: PeriodSummary & { date: string };
+  week: PeriodSummary;
   byDay: Record<string, RepoStats>;
 };
 

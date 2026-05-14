@@ -1,8 +1,18 @@
 @import "tailwindcss";
 
-:root {
+:root,
+[data-theme="light"] {
   --background: #fff;
   --foreground: #000;
+  --border: #ebebeb;
+  --muted: #888;
+}
+
+[data-theme="dark"] {
+  --background: #000;
+  --foreground: #fff;
+  --border: #1f1f1f;
+  --muted: #777;
 }
 
 @theme inline {
@@ -19,15 +29,15 @@
 }
 
 html {
-  background: #fff;
-  color: #000;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 body {
   min-height: 100vh;
   margin: 0;
-  background: #fff;
-  color: #000;
+  background: var(--background);
+  color: var(--foreground);
   font-family: var(--font-geist-mono), "Courier New", monospace;
 }
 
@@ -42,7 +52,7 @@ button {
 
 .wrap {
   width: 100%;
-  max-width: 480px;
+  max-width: 760px;
   margin: 0 auto;
   padding: 64px 32px 96px;
 }
@@ -63,20 +73,49 @@ button {
 
 .topline .handle {
   margin-bottom: 0;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.wordmark-bold {
+  font-weight: 700;
+}
+
+.topline .handle a {
+  border-bottom-color: transparent;
+}
+
+.topline .handle a:hover {
+  border-bottom-color: var(--foreground);
 }
 
 .handle a,
 .permalink a,
-.toggle a {
-  border-bottom: 1px solid #ebebeb;
+.toggle a,
+.contact a {
+  border-bottom: 1px solid var(--border);
   padding-bottom: 1px;
 }
 
 .handle a:hover,
 .permalink a:hover,
 .toggle a:hover,
-.toggle .active {
-  border-color: #000;
+.toggle .active,
+.contact a:hover {
+  border-color: var(--foreground);
+}
+
+.topline-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tagline {
+  margin: -32px 0 48px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .date {
@@ -88,11 +127,11 @@ button {
 
 .hero-num {
   font-family: var(--font-geist-sans), sans-serif;
-  font-size: clamp(64px, 18vw, 96px);
+  font-size: clamp(48px, 11vw, 120px);
   font-weight: 400;
   line-height: 1;
-  letter-spacing: 0;
-  overflow-wrap: anywhere;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .hero-sub {
@@ -108,7 +147,7 @@ button {
 
 .section-head {
   margin: 0;
-  border-top: 1px solid #000;
+  border-top: 1px solid var(--foreground);
   padding-top: 12px;
   font-size: 10px;
   font-weight: 400;
@@ -129,7 +168,7 @@ button {
   align-items: baseline;
   justify-content: space-between;
   gap: 24px;
-  border-bottom: 1px solid #ebebeb;
+  border-bottom: 1px solid var(--border);
   padding: 11px 0;
 }
 
@@ -197,17 +236,61 @@ button {
 .bar {
   width: 100%;
   min-height: 2px;
-  background: #ebebeb;
+  background: var(--border);
 }
 
 .bar-active {
-  background: #000;
+  background: var(--foreground);
 }
 
 .bar-day {
   font-size: 9px;
   letter-spacing: 0;
   text-align: center;
+}
+
+.prose {
+  margin: 0;
+  padding: 14px 0 0;
+  max-width: 56ch;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  border-top: 1px solid var(--border);
+  margin-top: 28px;
+  padding-top: 18px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric-val {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.metric-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.contact {
+  margin-top: 48px;
+  font-size: 11px;
+  letter-spacing: 0;
 }
 
 .permalink {
@@ -221,17 +304,17 @@ button {
   min-height: 32px;
   align-items: center;
   justify-content: center;
-  border: 1px solid #000;
+  border: 1px solid var(--foreground);
   border-radius: 0;
   padding: 0 10px;
-  background: #fff;
-  color: #000;
+  background: var(--background);
+  color: var(--foreground);
   cursor: pointer;
   font-size: 11px;
   text-transform: uppercase;
 }
 
 .button:hover {
-  background: #000;
-  color: #fff;
+  background: var(--foreground);
+  color: var(--background);
 }

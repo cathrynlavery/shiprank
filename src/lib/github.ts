@@ -1,4 +1,9 @@
-import type { RepoLineStats, RepoStats, StatsPayload } from "@/lib/types";
+import type {
+  PeriodSummary,
+  RepoLineStats,
+  RepoStats,
+  StatsPayload,
+} from "@/lib/types";
 
 type GitHubRepo = {
   full_name: string;
@@ -20,6 +25,10 @@ type GitHubCommitDetail = {
     additions?: number;
     deletions?: number;
   };
+};
+
+type GitHubSearchResult = {
+  total_count: number;
 };
 
 const GITHUB_API = "https://api.github.com";
@@ -109,70 +118,119 @@ async function getCommitStats(
   }
 }
 
-function totalAdditions(repos: RepoStats) {
+async function getMergedPrCount(
+  token: string,
+  username: string,
+  query: string,
+) {
+  const q = encodeURIComponent(`author:${username} type:pr is:merged ${query}`);
+  const result = await githubGet<GitHubSearchResult>(
+    `/search/issues?q=${q}&per_page=1`,
+    token,
+  );
+  return result?.total_count ?? 0;
+}
+
+function sumLines(repos: RepoStats) {
   return Object.values(repos).reduce((sum, stats) => sum + stats.additions, 0);
 }
 
-function addStats(
-  repos: RepoStats,
+function sumNet(repos: RepoStats) {
+  return Object.values(repos).reduce(
+    (sum, stats) => sum + stats.additions - stats.deletions,
+    0,
+  );
+}
+
+function addRepoStats(
+  bucket: RepoStats,
   repoFullName: string,
   stats: RepoLineStats,
   isPrivate: boolean,
 ) {
-  repos[repoFullName] ??= {
+  bucket[repoFullName] ??= {
     additions: 0,
     deletions: 0,
     private: isPrivate,
   };
-  repos[repoFullName].additions += stats.additions;
-  repos[repoFullName].deletions += stats.deletions;
-  repos[repoFullName].private = isPrivate;
+  bucket[repoFullName].additions += stats.additions;
+  bucket[repoFullName].deletions += stats.deletions;
+  bucket[repoFullName].private = isPrivate;
 }
 
-export async function refreshUserStats(username: string, token: string) {
+export async function refreshUserStats(
+  username: string,
+  token: string,
+): Promise<StatsPayload> {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
-  const weekAgoISO = new Date(
-    now.getTime() - 7 * 24 * 60 * 60 * 1000,
-  ).toISOString();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const weekAgoISO = weekAgo.toISOString();
+  const weekAgoDate = weekAgoISO.slice(0, 10);
+
   const byDay: StatsPayload["byDay"] = {};
+  const commitsByDay: Record<string, number> = {};
   const recentRepos = await getRecentRepos(token, weekAgoISO);
 
   for (const repo of recentRepos) {
-    const commits = await getCommits(token, repo.full_name, username, weekAgoISO);
+    const commits = await getCommits(
+      token,
+      repo.full_name,
+      username,
+      weekAgoISO,
+    );
 
     for (const commit of commits) {
       const date = commit.commit.author?.date?.slice(0, 10);
       if (!date) continue;
 
+      commitsByDay[date] = (commitsByDay[date] ?? 0) + 1;
       byDay[date] ??= {};
       const stats = await getCommitStats(token, repo.full_name, commit.sha);
-      addStats(byDay[date], repo.full_name, stats, repo.private);
+      addRepoStats(byDay[date], repo.full_name, stats, repo.private);
     }
   }
 
   const weekByRepo: RepoStats = {};
-
   for (const repos of Object.values(byDay)) {
     for (const [repoFullName, stats] of Object.entries(repos)) {
-      addStats(weekByRepo, repoFullName, stats, stats.private ?? false);
+      addRepoStats(weekByRepo, repoFullName, stats, stats.private ?? false);
     }
   }
 
+  const [prsToday, prsWeek] = await Promise.all([
+    getMergedPrCount(token, username, `merged:${today}`),
+    getMergedPrCount(token, username, `merged:>=${weekAgoDate}`),
+  ]);
+
   const todayByRepo = byDay[today] ?? {};
+  const todayCommits = commitsByDay[today] ?? 0;
+  const weekCommits = Object.values(commitsByDay).reduce(
+    (sum, n) => sum + n,
+    0,
+  );
+
+  const todaySummary: PeriodSummary = {
+    lines: sumLines(todayByRepo),
+    net: sumNet(todayByRepo),
+    commits: todayCommits,
+    prs: prsToday,
+    byRepo: todayByRepo,
+  };
+
+  const weekSummary: PeriodSummary = {
+    lines: sumLines(weekByRepo),
+    net: sumNet(weekByRepo),
+    commits: weekCommits,
+    prs: prsWeek,
+    byRepo: weekByRepo,
+  };
 
   return {
     username,
     generated: now.toISOString(),
-    today: {
-      date: today,
-      total: totalAdditions(todayByRepo),
-      byRepo: todayByRepo,
-    },
-    week: {
-      total: totalAdditions(weekByRepo),
-      byRepo: weekByRepo,
-    },
+    today: { date: today, ...todaySummary },
+    week: weekSummary,
     byDay,
-  } satisfies StatsPayload;
+  };
 }
