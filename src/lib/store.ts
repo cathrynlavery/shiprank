@@ -27,9 +27,34 @@ function netFromRepos(repos: RepoStats) {
   );
 }
 
-function normalizeStats(raw: unknown): StatsPayload {
+function sumAdditions(repos: RepoStats) {
+  return Object.values(repos).reduce((sum, stats) => sum + stats.additions, 0);
+}
+
+function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const time = new Date(`${value}T00:00:00Z`).getTime();
+  return Number.isFinite(time);
+}
+
+function safeIsoDate(value: unknown, fallback: string): string {
+  return typeof value === "string" && isIsoDate(value) ? value : fallback;
+}
+
+function dayBefore(isoDate: string): string {
+  const ms = new Date(`${isoDate}T00:00:00Z`).getTime();
+  if (!Number.isFinite(ms)) {
+    return new Date(Date.now() - 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+  }
+  return new Date(ms - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+export function normalizeStats(raw: unknown): StatsPayload {
   const r = asRecord(raw);
   const today = asRecord(r.today);
+  const yesterday = asRecord(r.yesterday);
   const week = asRecord(r.week);
   const todayByRepo = asRepoStats(today.byRepo);
   const weekByRepo = asRepoStats(week.byRepo);
@@ -37,20 +62,50 @@ function normalizeStats(raw: unknown): StatsPayload {
   const todayLines = asNumber(today.lines ?? today.total);
   const weekLines = asNumber(week.lines ?? week.total);
 
+  const todayDate = safeIsoDate(
+    today.date,
+    new Date().toISOString().slice(0, 10),
+  );
+  const yesterdayDate = safeIsoDate(yesterday.date, dayBefore(todayDate));
+
+  const byDay: StatsPayload["byDay"] =
+    r.byDay && typeof r.byDay === "object"
+      ? (r.byDay as StatsPayload["byDay"])
+      : {};
+
+  // Yesterday's byRepo/lines can be derived from byDay for legacy payloads
+  // that predate the yesterday top-level field. Commits + PRs aren't in byDay,
+  // so they stay zero until the next refresh.
+  const yesterdayByRepoFromBlock = asRepoStats(yesterday.byRepo);
+  const yesterdayByRepoFromDay = byDay[yesterdayDate] ?? {};
+  const yesterdayByRepo =
+    Object.keys(yesterdayByRepoFromBlock).length > 0
+      ? yesterdayByRepoFromBlock
+      : yesterdayByRepoFromDay;
+  const yesterdayLinesStored = asNumber(
+    yesterday.lines ?? yesterday.total,
+    sumAdditions(yesterdayByRepo),
+  );
+
   return {
     username: typeof r.username === "string" ? r.username : "",
     generated:
       typeof r.generated === "string" ? r.generated : new Date().toISOString(),
     today: {
-      date:
-        typeof today.date === "string"
-          ? today.date
-          : new Date().toISOString().slice(0, 10),
+      date: todayDate,
       lines: todayLines,
       net: asNumber(today.net, netFromRepos(todayByRepo)),
       commits: asNumber(today.commits),
       prs: asNumber(today.prs),
       byRepo: todayByRepo,
+    },
+    yesterday: {
+      date: yesterdayDate,
+      lines: yesterdayLinesStored,
+      net: asNumber(yesterday.net, netFromRepos(yesterdayByRepo)),
+      commits: asNumber(yesterday.commits),
+      prs: asNumber(yesterday.prs),
+      byRepo: yesterdayByRepo,
     },
     week: {
       lines: weekLines,
@@ -59,10 +114,7 @@ function normalizeStats(raw: unknown): StatsPayload {
       prs: asNumber(week.prs),
       byRepo: weekByRepo,
     },
-    byDay:
-      r.byDay && typeof r.byDay === "object"
-        ? (r.byDay as StatsPayload["byDay"])
-        : {},
+    byDay,
   };
 }
 

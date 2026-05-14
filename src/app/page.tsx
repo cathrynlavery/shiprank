@@ -3,11 +3,12 @@ import { auth } from "@/auth";
 import { ActivityChart } from "@/components/activity-chart";
 import { AuthButton } from "@/components/auth-button";
 import { CountUp } from "@/components/count-up";
+import { HamburgerMenu } from "@/components/hamburger-menu";
 import { MetricStrip } from "@/components/metric-strip";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { formatLines } from "@/lib/format";
 import { getAllStats } from "@/lib/store";
-import type { RepoStats, StatsPayload } from "@/lib/types";
+import type { PeriodSummary, RepoStats, StatsPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,44 @@ type HomeProps = {
     by?: string;
   }>;
 };
+
+type RangeKey = "today" | "yesterday" | "week";
+
+type RangeDef = {
+  label: string;
+  toggleLabel: string;
+  period: (stats: StatsPayload) => PeriodSummary;
+  date: (stats: StatsPayload) => string;
+};
+
+const RANGES: Record<RangeKey, RangeDef> = {
+  today: {
+    label: "today",
+    toggleLabel: "today",
+    period: (s) => s.today,
+    date: (s) => s.today.date,
+  },
+  yesterday: {
+    label: "yesterday",
+    toggleLabel: "yesterday",
+    period: (s) => s.yesterday,
+    date: (s) => s.yesterday.date,
+  },
+  week: {
+    label: "this week",
+    toggleLabel: "this week",
+    period: (s) => s.week,
+    date: (s) => s.today.date,
+  },
+};
+
+const RANGE_ORDER: RangeKey[] = ["today", "yesterday", "week"];
+
+function parseRange(value: string | undefined): RangeKey {
+  return (RANGE_ORDER as string[]).includes(value ?? "")
+    ? (value as RangeKey)
+    : "today";
+}
 
 function aggregateByDay(allStats: StatsPayload[]): StatsPayload["byDay"] {
   const out: StatsPayload["byDay"] = {};
@@ -38,18 +77,19 @@ export default async function Home({ searchParams }: HomeProps) {
     auth(),
     getAllStats(),
   ]);
-  const mode = range === "week" ? "week" : "today";
+  const mode = parseRange(range);
   const sortBy = by === "prs" ? "prs" : "lines";
+  const rangeDef = RANGES[mode];
   const leaderboard = allStats
     .map((stats) => {
-      const period = mode === "week" ? stats.week : stats.today;
+      const period = rangeDef.period(stats);
       return {
         username: stats.username,
         lines: period.lines,
         commits: period.commits,
         prs: period.prs,
         deletions: Math.max(0, period.lines - period.net),
-        date: stats.today.date,
+        date: rangeDef.date(stats),
       };
     })
     .sort((a, b) =>
@@ -57,7 +97,7 @@ export default async function Home({ searchParams }: HomeProps) {
     );
 
   const leader = leaderboard[0];
-  const today = leader?.date ?? new Date().toISOString().slice(0, 10);
+  const heroDate = leader?.date ?? new Date().toISOString().slice(0, 10);
   const heroLines = leaderboard.reduce((sum, entry) => sum + entry.lines, 0);
   const heroCommits = leaderboard.reduce(
     (sum, entry) => sum + entry.commits,
@@ -67,10 +107,10 @@ export default async function Home({ searchParams }: HomeProps) {
   const heroTotal = sortBy === "prs" ? heroPrs : heroLines;
   const devCount = leaderboard.length;
   const collectiveByDay = aggregateByDay(allStats);
+  const todayForChart = allStats[0]?.today.date ?? heroDate;
 
   const noun = sortBy === "prs" ? "prs merged" : "lines shipped";
-  const period = mode === "week" ? "this week" : "today";
-  const rangeLabel = `${noun} ${period}`;
+  const rangeLabel = `${noun} ${rangeDef.label}`;
   const developerCount =
     devCount === 1 ? "1 developer" : `${devCount} developers`;
   const heroSub =
@@ -84,13 +124,13 @@ export default async function Home({ searchParams }: HomeProps) {
     nextRange,
     nextSort,
   }: {
-    nextRange?: "today" | "week";
+    nextRange?: RangeKey;
     nextSort?: "lines" | "prs";
   }) {
     const params = new URLSearchParams();
     const effectiveRange = nextRange ?? mode;
     const effectiveSort = nextSort ?? sortBy;
-    if (effectiveRange === "week") params.set("range", "week");
+    if (effectiveRange !== "today") params.set("range", effectiveRange);
     if (effectiveSort === "prs") params.set("by", "prs");
     const qs = params.toString();
     return qs ? `/?${qs}` : "/";
@@ -104,7 +144,7 @@ export default async function Home({ searchParams }: HomeProps) {
             <span className="wordmark-bold">ship</span>rank
           </Link>
         </div>
-        <div className="topline-actions">
+        <HamburgerMenu>
           {session?.githubUsername ? (
             <Link className="button" href={`/${session.githubUsername}`}>
               my stats
@@ -112,12 +152,12 @@ export default async function Home({ searchParams }: HomeProps) {
           ) : null}
           <ThemeToggle />
           <AuthButton session={session} />
-        </div>
+        </HamburgerMenu>
       </div>
 
       <p className="tagline">A public leaderboard for developers who ship.</p>
 
-      <div className="date">{today}</div>
+      <div className="date">{heroDate}</div>
       <div className="hero-num">
         <CountUp value={heroTotal} />
       </div>
@@ -127,24 +167,21 @@ export default async function Home({ searchParams }: HomeProps) {
 
       <section className="section">
         <h2 className="section-head">last 7 days</h2>
-        <ActivityChart byDay={collectiveByDay} today={today} />
+        <ActivityChart byDay={collectiveByDay} today={todayForChart} />
       </section>
 
       <section className="section">
         <h2 className="section-head">leaderboard</h2>
         <div className="toggle" aria-label="leaderboard range">
-          <Link
-            className={mode === "today" ? "active" : ""}
-            href={buildHref({ nextRange: "today" })}
-          >
-            today
-          </Link>
-          <Link
-            className={mode === "week" ? "active" : ""}
-            href={buildHref({ nextRange: "week" })}
-          >
-            this week
-          </Link>
+          {RANGE_ORDER.map((key) => (
+            <Link
+              key={key}
+              className={mode === key ? "active" : ""}
+              href={buildHref({ nextRange: key })}
+            >
+              {RANGES[key].toggleLabel}
+            </Link>
+          ))}
         </div>
         <div className="toggle" aria-label="leaderboard sort">
           <Link

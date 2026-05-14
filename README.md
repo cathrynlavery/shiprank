@@ -70,8 +70,10 @@ https://your-deployment.vercel.app/api/auth/callback/github
 The daily cron is configured in `vercel.json`. To force a refresh:
 
 ```bash
-curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain/api/cron/refresh
+curl -fsSL -H "Authorization: Bearer $CRON_SECRET" https://your-domain/api/cron/refresh
 ```
+
+Run this once after any deploy that adds a new period to `StatsPayload` (e.g. `yesterday`, `month`) so existing users get the new fields populated before the next 08:00 UTC cron.
 
 ## Built by
 

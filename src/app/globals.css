@@ -114,6 +114,81 @@ button {
   gap: 8px;
 }
 
+.topline-menu {
+  position: relative;
+}
+
+.topline-menu > .menu-toggle {
+  display: none;
+  padding: 0;
+  border: 1px solid var(--foreground);
+  background: var(--background);
+  cursor: pointer;
+}
+
+.menu-panel {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.menu-icon {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 16px;
+  height: 12px;
+}
+
+.menu-icon span {
+  display: block;
+  height: 1.5px;
+  background: var(--foreground);
+}
+
+@media (max-width: 640px) {
+  .topline-menu > .menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+  }
+
+  .topline-menu .menu-panel[data-open="false"] {
+    display: none;
+  }
+
+  .topline-menu .menu-panel[data-open="true"] {
+    display: flex;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 10;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 160px;
+    border: 1px solid var(--foreground);
+    background: var(--background);
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .topline-menu .menu-panel[data-open="true"] .button {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .topline-menu .menu-panel[data-open="true"] form {
+    display: block;
+  }
+
+  .topline-menu .menu-panel[data-open="true"] form .button {
+    width: 100%;
+  }
+}
+
 .tagline {
   margin: -32px 0 48px;
   font-size: 12px;

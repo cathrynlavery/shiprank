@@ -164,6 +164,9 @@ export async function refreshUserStats(
 ): Promise<StatsPayload> {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const weekAgoISO = weekAgo.toISOString();
   const weekAgoDate = weekAgoISO.slice(0, 10);
@@ -198,13 +201,16 @@ export async function refreshUserStats(
     }
   }
 
-  const [prsToday, prsWeek] = await Promise.all([
+  const [prsToday, prsYesterday, prsWeek] = await Promise.all([
     getMergedPrCount(token, username, `merged:${today}`),
+    getMergedPrCount(token, username, `merged:${yesterday}`),
     getMergedPrCount(token, username, `merged:>=${weekAgoDate}`),
   ]);
 
   const todayByRepo = byDay[today] ?? {};
+  const yesterdayByRepo = byDay[yesterday] ?? {};
   const todayCommits = commitsByDay[today] ?? 0;
+  const yesterdayCommits = commitsByDay[yesterday] ?? 0;
   const weekCommits = Object.values(commitsByDay).reduce(
     (sum, n) => sum + n,
     0,
@@ -216,6 +222,14 @@ export async function refreshUserStats(
     commits: todayCommits,
     prs: prsToday,
     byRepo: todayByRepo,
+  };
+
+  const yesterdaySummary: PeriodSummary = {
+    lines: sumLines(yesterdayByRepo),
+    net: sumNet(yesterdayByRepo),
+    commits: yesterdayCommits,
+    prs: prsYesterday,
+    byRepo: yesterdayByRepo,
   };
 
   const weekSummary: PeriodSummary = {
@@ -230,6 +244,7 @@ export async function refreshUserStats(
     username,
     generated: now.toISOString(),
     today: { date: today, ...todaySummary },
+    yesterday: { date: yesterday, ...yesterdaySummary },
     week: weekSummary,
     byDay,
   };

@@ -46,6 +46,18 @@ export function StatsPage({ stats }: { stats: StatsPayload }) {
       </section>
 
       <section className="section">
+        <h2 className="section-head">yesterday · {stats.yesterday.date}</h2>
+        <div className="sub-num">{signedLines(stats.yesterday.lines)}</div>
+        <div className="hero-sub">lines shipped</div>
+        <MetricStrip
+          lines={stats.yesterday.lines}
+          commits={stats.yesterday.commits}
+          prs={stats.yesterday.prs}
+        />
+        <RepoList repos={stats.yesterday.byRepo} />
+      </section>
+
+      <section className="section">
         <h2 className="section-head">this week</h2>
         <div className="sub-num">+{formatLines(stats.week.lines)}</div>
         <div className="hero-sub">lines total</div>

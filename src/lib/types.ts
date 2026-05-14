@@ -18,6 +18,7 @@ export type StatsPayload = {
   username: string;
   generated: string;
   today: PeriodSummary & { date: string };
+  yesterday: PeriodSummary & { date: string };
   week: PeriodSummary;
   byDay: Record<string, RepoStats>;
 };
