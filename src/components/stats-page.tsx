@@ -67,6 +67,8 @@ export function StatsPage({ stats }: { stats: StatsPayload }) {
         <RepoList repos={stats.week.byRepo} limit={8} />
       </section>
 
+      <p className="contact">Stats refresh daily at 08:00 UTC.</p>
+
       <div className="permalink">
         <a href={`https://github.com/${stats.username}`}>github profile</a>
       </div>

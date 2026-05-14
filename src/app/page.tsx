@@ -123,6 +123,7 @@ export default async function Home({ searchParams }: HomeProps) {
         </p>
       </section>
 
+      <p className="contact">Stats refresh daily at 08:00 UTC.</p>
       <p className="contact">
         Questions or removal requests:{" "}
         <a href="mailto:hello@shiprank.dev">hello@shiprank.dev</a>
