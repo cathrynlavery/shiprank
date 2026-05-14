@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { refreshUserStats } from "@/lib/github";
 import { getAllUsers, saveStats } from "@/lib/store";
 
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
