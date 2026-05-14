@@ -1,10 +1,6 @@
 import { kv } from "@vercel/kv";
 import type { RepoStats, StatsPayload, StoredUser } from "@/lib/types";
 
-const fallbackStatsUrl =
-  process.env.FALLBACK_STATS_URL ??
-  "https://cathrynlavery.github.io/shipstats/stats.json";
-
 function hasKv() {
   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
 }
@@ -70,21 +66,6 @@ function normalizeStats(raw: unknown): StatsPayload {
   };
 }
 
-async function getFallbackStats(username?: string) {
-  if (username && username.toLowerCase() !== "cathrynlavery") return null;
-
-  try {
-    const response = await fetch(fallbackStatsUrl, {
-      cache: "no-store",
-      next: { revalidate: 0 },
-    });
-    if (!response.ok) return null;
-    return normalizeStats(await response.json());
-  } catch {
-    return null;
-  }
-}
-
 export async function saveUser(user: StoredUser) {
   if (!hasKv()) return;
   await kv.set(`user:${user.username}`, user);
@@ -96,16 +77,13 @@ export async function saveStats(stats: StatsPayload) {
 }
 
 export async function getStats(username: string) {
-  if (!hasKv()) return getFallbackStats(username);
+  if (!hasKv()) return null;
   const raw = await kv.get(`stats:${username}`);
   return raw ? normalizeStats(raw) : null;
 }
 
 export async function getAllStats() {
-  if (!hasKv()) {
-    const fallback = await getFallbackStats();
-    return fallback ? [fallback] : [];
-  }
+  if (!hasKv()) return [];
 
   const stats: StatsPayload[] = [];
 
