@@ -176,34 +176,6 @@ export default async function Home({ searchParams }: HomeProps) {
           </p>
         </details>
       </div>
-
-      <p className="contact">Stats refresh daily at 08:00 UTC.</p>
-      <p className="contact">
-        Questions or removal requests:{" "}
-        <a href="mailto:hello@shiprank.dev">hello@shiprank.dev</a>
-      </p>
-      <p className="contact">
-        Open source on{" "}
-        <a
-          href="https://github.com/cathrynlavery/shiprank"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          github
-        </a>
-        .
-      </p>
-      <p className="contact">
-        Made by{" "}
-        <a
-          href="https://littlemight.com"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Cathryn Lavery
-        </a>
-        .
-      </p>
     </main>
   );
 }

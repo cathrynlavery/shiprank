@@ -151,7 +151,7 @@ button {
   margin: 0;
   border-top: 1px solid var(--foreground);
   padding-top: 12px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -401,4 +401,61 @@ button {
 .button:hover {
   background: var(--foreground);
   color: var(--background);
+}
+
+.site-footer {
+  margin-top: auto;
+  background: #000;
+  color: #fff;
+  padding: 28px 32px;
+}
+
+.site-footer-inner {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.site-footer a {
+  color: #fff;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 1px;
+}
+
+.site-footer a:hover {
+  border-bottom-color: #fff;
+}
+
+.site-footer-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: none !important;
+}
+
+.site-footer-icon svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.site-footer-icon:hover {
+  opacity: 0.8;
+}
+
+.site-footer-name {
+  font-weight: 500;
+}
+
+.site-footer-meta {
+  margin-left: auto;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
