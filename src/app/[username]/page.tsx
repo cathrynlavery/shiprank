@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { auth } from "@/auth";
+import { FirstRefresh } from "@/components/first-refresh";
 import { StatsPage } from "@/components/stats-page";
-import { getStats } from "@/lib/store";
+import { getStats, getUser } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +35,14 @@ export async function generateMetadata({
 
 export default async function UserPage({ params }: UserPageProps) {
   const { username } = await params;
-  const stats = await getStats(username);
+  const [stats, session] = await Promise.all([getStats(username), auth()]);
 
-  if (!stats) notFound();
+  if (stats) return <StatsPage stats={stats} />;
 
-  return <StatsPage stats={stats} />;
+  if (session?.githubUsername === username) {
+    const user = await getUser(username);
+    if (user) return <FirstRefresh username={username} />;
+  }
+
+  notFound();
 }

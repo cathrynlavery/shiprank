@@ -1,7 +1,6 @@
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
-import { refreshUserStats } from "@/lib/github";
-import { saveStats, saveUser } from "@/lib/store";
+import { saveUser } from "@/lib/store";
 
 type GitHubProfile = {
   login?: string;
@@ -33,8 +32,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name,
           image: user.image,
         });
-        const stats = await refreshUserStats(username, account.access_token);
-        await saveStats(stats);
       } catch (error) {
         console.error(error);
       }

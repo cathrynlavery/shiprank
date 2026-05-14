@@ -71,6 +71,11 @@ export async function saveUser(user: StoredUser) {
   await kv.set(`user:${user.username}`, user);
 }
 
+export async function getUser(username: string) {
+  if (!hasKv()) return null;
+  return (await kv.get<StoredUser>(`user:${username}`)) ?? null;
+}
+
 export async function saveStats(stats: StatsPayload) {
   if (!hasKv()) return;
   await kv.set(`stats:${stats.username}`, stats);
