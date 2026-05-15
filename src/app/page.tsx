@@ -3,11 +3,12 @@ import { auth } from "@/auth";
 import { ActivityChart } from "@/components/activity-chart";
 import { AuthButton } from "@/components/auth-button";
 import { CountUp } from "@/components/count-up";
+import { GitHubPermissionNotice } from "@/components/github-permission-notice";
 import { HamburgerMenu } from "@/components/hamburger-menu";
 import { MetricStrip } from "@/components/metric-strip";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { formatLines } from "@/lib/format";
-import { getAllStats } from "@/lib/store";
+import { shortDate, weekRange } from "@/lib/date-label";
+import { getAllStats, getUser } from "@/lib/store";
 import type { PeriodSummary, RepoStats, StatsPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -98,6 +99,8 @@ export default async function Home({ searchParams }: HomeProps) {
 
   const leader = leaderboard[0];
   const heroDate = leader?.date ?? new Date().toISOString().slice(0, 10);
+  const heroDateLabel =
+    mode === "week" ? weekRange(heroDate) : shortDate(heroDate);
   const heroLines = leaderboard.reduce((sum, entry) => sum + entry.lines, 0);
   const heroCommits = leaderboard.reduce(
     (sum, entry) => sum + entry.commits,
@@ -108,6 +111,12 @@ export default async function Home({ searchParams }: HomeProps) {
   const devCount = leaderboard.length;
   const collectiveByDay = aggregateByDay(allStats);
   const todayForChart = allStats[0]?.today.date ?? heroDate;
+  const currentUser = session?.githubUsername
+    ? await getUser(session.githubUsername)
+    : null;
+  const showPermissionNotice =
+    Boolean(session?.githubUsername) && currentUser?.tokenKind !== "github-app";
+  const isRegisteredUser = Boolean(session?.githubUsername && currentUser);
 
   const noun = sortBy === "prs" ? "prs merged" : "lines shipped";
   const rangeLabel = `${noun} ${rangeDef.label}`;
@@ -151,15 +160,31 @@ export default async function Home({ searchParams }: HomeProps) {
             </Link>
           ) : null}
           <ThemeToggle />
-          <AuthButton session={session} />
+          <AuthButton session={session} isRegistered={isRegisteredUser} />
         </HamburgerMenu>
       </div>
 
-      <p className="tagline">A public leaderboard for developers who ship.</p>
+      <p className="tagline">A public leaderboard for people who ship.</p>
+      {showPermissionNotice ? <GitHubPermissionNotice /> : null}
 
-      <div className="date">{heroDate}</div>
+      <div className="tabs-head">
+        <div className="tabs-list" aria-label="leaderboard range">
+          {RANGE_ORDER.map((key) => (
+            <Link
+              aria-current={mode === key ? "page" : undefined}
+              key={key}
+              className={mode === key ? "tab-button active" : "tab-button"}
+              href={buildHref({ nextRange: key })}
+            >
+              {RANGES[key].toggleLabel}
+            </Link>
+          ))}
+        </div>
+        <div className="period-date">{heroDateLabel}</div>
+      </div>
+
       <div className="hero-num">
-        <CountUp value={heroTotal} />
+        <CountUp value={heroTotal} signed={sortBy !== "prs"} />
       </div>
       <div className="hero-sub">{heroSub}</div>
 
@@ -172,17 +197,6 @@ export default async function Home({ searchParams }: HomeProps) {
 
       <section className="section">
         <h2 className="section-head">leaderboard</h2>
-        <div className="toggle" aria-label="leaderboard range">
-          {RANGE_ORDER.map((key) => (
-            <Link
-              key={key}
-              className={mode === key ? "active" : ""}
-              href={buildHref({ nextRange: key })}
-            >
-              {RANGES[key].toggleLabel}
-            </Link>
-          ))}
-        </div>
         <div className="toggle" aria-label="leaderboard sort">
           <Link
             className={sortBy === "lines" ? "active" : ""}
@@ -199,36 +213,28 @@ export default async function Home({ searchParams }: HomeProps) {
         </div>
 
         {leaderboard.length ? (
-          leaderboard.map((entry, index) => {
-            const primary =
-              sortBy === "prs"
-                ? `${formatLines(entry.prs)} prs`
-                : `+${formatLines(entry.lines)}`;
-            return (
-              <Link
-                className="row row-link"
-                href={`/${entry.username}`}
-                key={entry.username}
-              >
-                <div className="row-main">
-                  <span className="label">
-                    {String(index + 1).padStart(2, "0")} / @{entry.username}
-                  </span>
-                  <span className="val">{primary}</span>
-                </div>
-                <div className="row-detail">
-                  <span>{formatLines(entry.commits)} commits</span>
-                  <span className="row-detail-sep">·</span>
-                  <span>{formatLines(entry.prs)} merged prs</span>
-                  <span className="row-detail-sep">·</span>
-                  <span>
-                    +{formatLines(entry.lines)} / −
-                    {formatLines(entry.deletions)}
-                  </span>
-                </div>
-              </Link>
-            );
-          })
+          leaderboard.map((entry, index) => (
+            <Link
+              className="repo-row leaderboard-row"
+              href={`/${entry.username}`}
+              key={entry.username}
+            >
+              <div className="repo-meta leaderboard-meta">
+                <span className="leaderboard-rank">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="repo-name repo-link">@{entry.username}</span>
+              </div>
+              <span className="repo-lines">
+                <CountUp
+                  value={sortBy === "prs" ? entry.prs : entry.lines}
+                  durationMs={650}
+                  signed={sortBy !== "prs"}
+                  suffix={sortBy === "prs" ? "prs" : undefined}
+                />
+              </span>
+            </Link>
+          ))
         ) : (
           <p className="empty">nothing yet</p>
         )}
@@ -247,9 +253,9 @@ export default async function Home({ searchParams }: HomeProps) {
         <details className="collapsible">
           <summary className="section-head">what we store</summary>
           <p className="prose">
-            We store your GitHub username, OAuth token, and recent line-count
-            stats so daily refreshes can run. Tokens are used only to read your
-            repositories and commits for stats generation.
+            We store your GitHub username, GitHub token, and recent line-count
+            stats so daily refreshes can run. Tokens are used only for read-only
+            stats generation.
           </p>
         </details>
 

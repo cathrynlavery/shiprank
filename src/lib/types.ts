@@ -26,6 +26,11 @@ export type StatsPayload = {
 export type StoredUser = {
   username: string;
   token: string;
+  accessToken?: string;
+  accessTokenExpiresAt?: number;
+  refreshToken?: string;
+  refreshTokenExpiresAt?: number;
+  tokenKind?: "oauth" | "github-app";
   registeredAt: string;
   name?: string | null;
   image?: string | null;

@@ -31,6 +31,18 @@ type GitHubSearchResult = {
   total_count: number;
 };
 
+type GitHubInstallation = {
+  id: number;
+};
+
+type GitHubInstallationsResult = {
+  installations?: GitHubInstallation[];
+};
+
+type GitHubInstallationReposResult = {
+  repositories?: GitHubRepo[];
+};
+
 const GITHUB_API = "https://api.github.com";
 
 async function githubGet<T>(path: string, token: string): Promise<T | null> {
@@ -54,7 +66,7 @@ async function githubGet<T>(path: string, token: string): Promise<T | null> {
   return (await response.json()) as T;
 }
 
-async function getRecentRepos(token: string, weekAgoISO: string) {
+async function getRecentOAuthRepos(token: string, weekAgoISO: string) {
   const repos: GitHubRepo[] = [];
 
   for (let page = 1; page <= 5; page++) {
@@ -72,6 +84,46 @@ async function getRecentRepos(token: string, weekAgoISO: string) {
   }
 
   return repos.filter((repo) => repo.pushed_at >= weekAgoISO);
+}
+
+async function getGitHubAppRepos(token: string) {
+  const repos = new Map<string, GitHubRepo>();
+  const installations = await githubGet<GitHubInstallationsResult>(
+    "/user/installations?per_page=100",
+    token,
+  );
+
+  for (const installation of installations?.installations ?? []) {
+    for (let page = 1; page <= 5; page++) {
+      const batch = await githubGet<GitHubInstallationReposResult>(
+        `/user/installations/${installation.id}/repositories?per_page=100&page=${page}`,
+        token,
+      );
+      const repositories = batch?.repositories ?? [];
+      if (!repositories.length) break;
+
+      for (const repo of repositories) {
+        repos.set(repo.full_name, repo);
+      }
+
+      if (repositories.length < 100) break;
+    }
+  }
+
+  return [...repos.values()];
+}
+
+async function getRecentRepos(token: string, weekAgoISO: string) {
+  try {
+    const repos = await getGitHubAppRepos(token);
+    if (repos.length) {
+      return repos.filter((repo) => repo.pushed_at >= weekAgoISO);
+    }
+  } catch (error) {
+    console.warn("Falling back to OAuth repo listing", error);
+  }
+
+  return getRecentOAuthRepos(token, weekAgoISO);
 }
 
 async function getCommits(

@@ -2,16 +2,22 @@
 
 import { useEffect, useState } from "react";
 
-function format(n: number) {
-  return n > 0 ? `+${n.toLocaleString("en-US")}` : "0";
+function format(n: number, signed: boolean, suffix?: string) {
+  const formatted =
+    signed && n > 0 ? `+${n.toLocaleString("en-US")}` : n.toLocaleString("en-US");
+  return suffix ? `${formatted} ${suffix}` : formatted;
 }
 
 export function CountUp({
   value,
   durationMs = 900,
+  signed = true,
+  suffix,
 }: {
   value: number;
   durationMs?: number;
+  signed?: boolean;
+  suffix?: string;
 }) {
   const [n, setN] = useState(0);
 
@@ -29,5 +35,5 @@ export function CountUp({
     return () => cancelAnimationFrame(raf);
   }, [value, durationMs]);
 
-  return <>{format(n)}</>;
+  return <>{format(n, signed, suffix)}</>;
 }

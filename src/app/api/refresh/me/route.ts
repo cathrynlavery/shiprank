@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { refreshUserStats } from "@/lib/github";
-import { getUser, saveStats } from "@/lib/store";
+import { getUsableGitHubToken } from "@/lib/github-token";
+import { getUser, saveStats, saveUser } from "@/lib/store";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -19,7 +20,10 @@ export async function POST() {
   }
 
   try {
-    const stats = await refreshUserStats(username, user.token);
+    const { user: updatedUser, token } = await getUsableGitHubToken(user);
+    if (updatedUser !== user) await saveUser(updatedUser);
+
+    const stats = await refreshUserStats(username, token);
     await saveStats(stats);
     return NextResponse.json({ ok: true, generated: stats.generated });
   } catch (error) {
