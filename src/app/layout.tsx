@@ -62,7 +62,7 @@ export default function RootLayout({
               Cathryn Lavery
             </a>
             <span className="site-footer-meta">
-              Stats refresh daily at 08:00 UTC
+              Stats refresh at 09:00 and 20:00 UTC
             </span>
           </div>
         </footer>

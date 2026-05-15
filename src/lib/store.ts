@@ -31,6 +31,23 @@ function sumAdditions(repos: RepoStats) {
   return Object.values(repos).reduce((sum, stats) => sum + stats.additions, 0);
 }
 
+function normalizePeriod(
+  raw: Record<string, unknown>,
+  fallbackByRepo: RepoStats,
+) {
+  const byRepoFromBlock = asRepoStats(raw.byRepo);
+  const byRepo =
+    Object.keys(byRepoFromBlock).length > 0 ? byRepoFromBlock : fallbackByRepo;
+
+  return {
+    lines: asNumber(raw.lines ?? raw.total, sumAdditions(byRepo)),
+    net: asNumber(raw.net, netFromRepos(byRepo)),
+    commits: asNumber(raw.commits),
+    prs: asNumber(raw.prs),
+    byRepo,
+  };
+}
+
 function isIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const time = new Date(`${value}T00:00:00Z`).getTime();
@@ -51,21 +68,17 @@ function dayBefore(isoDate: string): string {
   return new Date(ms - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-export function normalizeStats(raw: unknown): StatsPayload {
+export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
   const r = asRecord(raw);
   const today = asRecord(r.today);
   const yesterday = asRecord(r.yesterday);
   const week = asRecord(r.week);
-  const todayByRepo = asRepoStats(today.byRepo);
   const weekByRepo = asRepoStats(week.byRepo);
-
-  const todayLines = asNumber(today.lines ?? today.total);
   const weekLines = asNumber(week.lines ?? week.total);
+  const currentDate = now.toISOString().slice(0, 10);
+  const currentYesterdayDate = dayBefore(currentDate);
 
-  const todayDate = safeIsoDate(
-    today.date,
-    new Date().toISOString().slice(0, 10),
-  );
+  const todayDate = safeIsoDate(today.date, currentDate);
   const yesterdayDate = safeIsoDate(yesterday.date, dayBefore(todayDate));
 
   const byDay: StatsPayload["byDay"] =
@@ -73,39 +86,44 @@ export function normalizeStats(raw: unknown): StatsPayload {
       ? (r.byDay as StatsPayload["byDay"])
       : {};
 
-  // Yesterday's byRepo/lines can be derived from byDay for legacy payloads
-  // that predate the yesterday top-level field. Commits + PRs aren't in byDay,
-  // so they stay zero until the next refresh.
-  const yesterdayByRepoFromBlock = asRepoStats(yesterday.byRepo);
-  const yesterdayByRepoFromDay = byDay[yesterdayDate] ?? {};
-  const yesterdayByRepo =
-    Object.keys(yesterdayByRepoFromBlock).length > 0
-      ? yesterdayByRepoFromBlock
-      : yesterdayByRepoFromDay;
-  const yesterdayLinesStored = asNumber(
-    yesterday.lines ?? yesterday.total,
-    sumAdditions(yesterdayByRepo),
+  const storedToday = normalizePeriod(today, byDay[todayDate] ?? {});
+  const storedYesterday = normalizePeriod(
+    yesterday,
+    byDay[yesterdayDate] ?? {},
   );
+
+  let normalizedTodayDate = todayDate;
+  let normalizedToday = storedToday;
+  let normalizedYesterdayDate = yesterdayDate;
+  let normalizedYesterday = storedYesterday;
+
+  if (todayDate < currentDate) {
+    normalizedTodayDate = currentDate;
+    normalizedToday = normalizePeriod({}, byDay[currentDate] ?? {});
+    normalizedYesterdayDate = currentYesterdayDate;
+
+    if (todayDate === currentYesterdayDate) {
+      normalizedYesterday = storedToday;
+    } else if (yesterdayDate === currentYesterdayDate) {
+      normalizedYesterday = storedYesterday;
+    } else {
+      normalizedYesterday = normalizePeriod(
+        {},
+        byDay[currentYesterdayDate] ?? {},
+      );
+    }
+  }
 
   return {
     username: typeof r.username === "string" ? r.username : "",
-    generated:
-      typeof r.generated === "string" ? r.generated : new Date().toISOString(),
+    generated: typeof r.generated === "string" ? r.generated : now.toISOString(),
     today: {
-      date: todayDate,
-      lines: todayLines,
-      net: asNumber(today.net, netFromRepos(todayByRepo)),
-      commits: asNumber(today.commits),
-      prs: asNumber(today.prs),
-      byRepo: todayByRepo,
+      date: normalizedTodayDate,
+      ...normalizedToday,
     },
     yesterday: {
-      date: yesterdayDate,
-      lines: yesterdayLinesStored,
-      net: asNumber(yesterday.net, netFromRepos(yesterdayByRepo)),
-      commits: asNumber(yesterday.commits),
-      prs: asNumber(yesterday.prs),
-      byRepo: yesterdayByRepo,
+      date: normalizedYesterdayDate,
+      ...normalizedYesterday,
     },
     week: {
       lines: weekLines,

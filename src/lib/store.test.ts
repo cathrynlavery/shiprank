@@ -14,9 +14,13 @@ function makePeriod(overrides: Partial<StatsPayload["today"]> = {}) {
   };
 }
 
+function normalizeAt(raw: unknown, iso = "2026-05-14T12:00:00.000Z") {
+  return normalizeStats(raw, new Date(iso));
+}
+
 describe("normalizeStats", () => {
   it("returns a usable shape for completely empty input", () => {
-    const stats = normalizeStats({});
+    const stats = normalizeAt({});
     expect(stats.username).toBe("");
     expect(stats.today.lines).toBe(0);
     expect(stats.yesterday.lines).toBe(0);
@@ -59,7 +63,7 @@ describe("normalizeStats", () => {
       },
     };
 
-    const out = normalizeStats(input);
+    const out = normalizeAt(input);
     expect(out.username).toBe("ada");
     expect(out.today.lines).toBe(100);
     expect(out.yesterday.lines).toBe(50);
@@ -71,7 +75,7 @@ describe("normalizeStats", () => {
   });
 
   it("derives yesterdayDate as today minus one day when missing", () => {
-    const stats = normalizeStats({
+    const stats = normalizeAt({
       today: { date: "2026-05-14", lines: 10 },
     });
     expect(stats.today.date).toBe("2026-05-14");
@@ -79,20 +83,20 @@ describe("normalizeStats", () => {
   });
 
   it("does not crash on a malformed today.date string", () => {
-    const stats = normalizeStats({ today: { date: "not-a-date", lines: 0 } });
+    const stats = normalizeAt({ today: { date: "not-a-date", lines: 0 } });
     // Falls back to today and yesterday-of-today instead of throwing.
     expect(stats.today.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(stats.yesterday.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("rejects an obviously bad date format (mm/dd/yyyy)", () => {
-    const stats = normalizeStats({ today: { date: "05/14/2026" } });
+    const stats = normalizeAt({ today: { date: "05/14/2026" } });
     expect(stats.today.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(stats.today.date).not.toBe("05/14/2026");
   });
 
   it("derives yesterday lines from byDay when yesterday block is missing (legacy payload)", () => {
-    const stats = normalizeStats({
+    const stats = normalizeAt({
       today: { date: "2026-05-14", lines: 100 },
       byDay: {
         "2026-05-13": {
@@ -110,7 +114,7 @@ describe("normalizeStats", () => {
   });
 
   it("prefers stored yesterday block over byDay-derived data", () => {
-    const stats = normalizeStats({
+    const stats = normalizeAt({
       today: { date: "2026-05-14" },
       yesterday: {
         date: "2026-05-13",
@@ -127,8 +131,69 @@ describe("normalizeStats", () => {
     });
   });
 
+  it("promotes a stale today snapshot to yesterday after the date rolls over", () => {
+    const stats = normalizeAt(
+      {
+        today: {
+          date: "2026-05-14",
+          lines: 120,
+          net: 90,
+          commits: 4,
+          prs: 2,
+          byRepo: { "ada/repo": { additions: 120, deletions: 30 } },
+        },
+        yesterday: {
+          date: "2026-05-13",
+          lines: 40,
+          net: 35,
+          commits: 1,
+          prs: 0,
+          byRepo: { "ada/old": { additions: 40, deletions: 5 } },
+        },
+      },
+      "2026-05-15T06:00:00.000Z",
+    );
+
+    expect(stats.today.date).toBe("2026-05-15");
+    expect(stats.today.lines).toBe(0);
+    expect(stats.yesterday.date).toBe("2026-05-14");
+    expect(stats.yesterday.lines).toBe(120);
+    expect(stats.yesterday.net).toBe(90);
+    expect(stats.yesterday.commits).toBe(4);
+    expect(stats.yesterday.prs).toBe(2);
+    expect(stats.yesterday.byRepo).toEqual({
+      "ada/repo": { additions: 120, deletions: 30 },
+    });
+  });
+
+  it("derives yesterday from byDay when the stored today snapshot is older than yesterday", () => {
+    const stats = normalizeAt(
+      {
+        today: {
+          date: "2026-05-13",
+          lines: 10,
+          byRepo: { "ada/old": { additions: 10, deletions: 0 } },
+        },
+        byDay: {
+          "2026-05-14": {
+            "ada/repo": { additions: 75, deletions: 15 },
+          },
+        },
+      },
+      "2026-05-15T06:00:00.000Z",
+    );
+
+    expect(stats.today.date).toBe("2026-05-15");
+    expect(stats.today.lines).toBe(0);
+    expect(stats.yesterday.date).toBe("2026-05-14");
+    expect(stats.yesterday.lines).toBe(75);
+    expect(stats.yesterday.net).toBe(60);
+    expect(stats.yesterday.commits).toBe(0);
+    expect(stats.yesterday.prs).toBe(0);
+  });
+
   it("computes net from byRepo when explicit net is missing", () => {
-    const stats = normalizeStats({
+    const stats = normalizeAt({
       today: {
         date: "2026-05-14",
         lines: 100,
@@ -139,7 +204,7 @@ describe("normalizeStats", () => {
   });
 
   it("treats garbage byDay as empty without throwing", () => {
-    const stats = normalizeStats({
+    const stats = normalizeAt({
       today: { date: "2026-05-14" },
       byDay: "not-an-object",
     });
@@ -147,7 +212,7 @@ describe("normalizeStats", () => {
   });
 
   it("guards yesterdayDate when today.date is parseable but unusual (year 1)", () => {
-    const stats = normalizeStats({ today: { date: "0001-01-01" } });
+    const stats = normalizeAt({ today: { date: "0001-01-01" } });
     // Should not throw; produce some valid date string.
     expect(stats.yesterday.date).toMatch(/^-?\d{4,6}-\d{2}-\d{2}$/);
   });

@@ -13,7 +13,7 @@ GitHub login → daily count of lines added across every repo you commit to → 
 LINES SHIPPED TODAY · ACROSS 2 DEVELOPERS · TOP @CATHRYNLAVERY
 ```
 
-Plus a 7-day activity chart, a today / this week toggle, per-profile breakdowns (commits, merged PRs, lines added vs removed), and a share card you can post to Twitter.
+Plus a 7-day activity chart, a today / yesterday / this week toggle, per-profile breakdowns (commits, merged PRs, lines added vs removed), and a share card you can post to Twitter.
 
 ## Privacy
 
@@ -29,7 +29,7 @@ Private repos count toward your total, but their contents stay private:
 - Next.js 16 App Router · TypeScript
 - Auth.js v5 (GitHub OAuth, scopes: `repo read:user user:email`)
 - Vercel KV (Upstash Redis)
-- Vercel Cron — daily refresh at 08:00 UTC
+- Vercel Cron — refresh at 09:00 and 20:00 UTC
 - `next/og` for Twitter / OG share cards
 - Geist + Geist Mono, dark/light mode, no CSS framework
 
@@ -67,13 +67,13 @@ https://your-deployment.vercel.app/api/auth/callback/github
 
 ## Manual refresh
 
-The daily cron is configured in `vercel.json`. To force a refresh:
+The cron jobs are configured in `vercel.json`. To force a refresh:
 
 ```bash
 curl -fsSL -H "Authorization: Bearer $CRON_SECRET" https://your-domain/api/cron/refresh
 ```
 
-Run this once after any deploy that adds a new period to `StatsPayload` (e.g. `yesterday`, `month`) so existing users get the new fields populated before the next 08:00 UTC cron.
+Run this once after any deploy that adds a new period to `StatsPayload` (e.g. `yesterday`, `month`) so existing users get the new fields populated before the next scheduled cron.
 
 ## Built by
 
