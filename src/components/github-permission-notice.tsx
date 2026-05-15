@@ -1,8 +1,6 @@
-import { githubAppInstallUrl } from "@/lib/github-app";
+import { signInWithGithub } from "@/app/actions";
 
 export function GitHubPermissionNotice() {
-  const installUrl = githubAppInstallUrl();
-
   return (
     <section className="permission-notice" aria-labelledby="github-access-note">
       <h2 id="github-access-note">github access update</h2>
@@ -14,14 +12,11 @@ export function GitHubPermissionNotice() {
         webhooks.
       </p>
       <div className="permission-notice-action">
-        <a
-          className="button cta-button"
-          href={installUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          reconnect with github
-        </a>
+        <form action={signInWithGithub}>
+          <button className="button cta-button" type="submit">
+            finish reconnect
+          </button>
+        </form>
       </div>
     </section>
   );
