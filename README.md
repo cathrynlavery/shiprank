@@ -1,6 +1,6 @@
 # shiprank
 
-A public leaderboard for developers who ship.
+A public leaderboard for people who ship.
 
 **Live at [shiprank.dev](https://shiprank.dev).**
 
@@ -22,12 +22,12 @@ Private repos count toward your total, but their contents stay private:
 - Private repo names show as deterministic sci-fi codenames (_Stellar Voyager 7f3_, _Eclipse Marauder 2a9_).
 - The leaderboard only shows aggregate totals — no per-repo breakdown.
 - Commit messages, file names, code, and diffs are never published.
-- OAuth tokens are stored in Vercel KV and used only to read repos for line counting.
+- GitHub tokens are stored in Vercel KV and used only for read-only stats generation.
 
 ## Stack
 
 - Next.js 16 App Router · TypeScript
-- Auth.js v5 (GitHub OAuth, scopes: `repo read:user user:email`)
+- Auth.js v5 (GitHub sign-in, scopes: `read:user user:email`)
 - Vercel KV (Upstash Redis)
 - Vercel Cron — refresh at 09:00 and 20:00 UTC
 - `next/og` for Twitter / OG share cards
@@ -58,8 +58,9 @@ https://your-deployment.vercel.app/api/auth/callback/github
 | Var                  | What                                                |
 | -------------------- | --------------------------------------------------- |
 | `AUTH_SECRET`        | `openssl rand -hex 32`                              |
-| `AUTH_GITHUB_ID`     | GitHub OAuth app client ID                          |
-| `AUTH_GITHUB_SECRET` | GitHub OAuth app secret                             |
+| `AUTH_GITHUB_ID`     | GitHub App client ID                                |
+| `AUTH_GITHUB_SECRET` | GitHub App client secret                            |
+| `GITHUB_APP_SLUG`    | GitHub App slug for repository installation links   |
 | `AUTH_URL`           | Deployed URL (or `http://localhost:3000` in dev)    |
 | `KV_REST_API_URL`    | Vercel KV / Upstash Redis REST URL                  |
 | `KV_REST_API_TOKEN`  | KV access token                                     |

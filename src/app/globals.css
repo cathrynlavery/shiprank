@@ -6,6 +6,7 @@
   --foreground: #000;
   --border: #ebebeb;
   --muted: #888;
+  --accent: #ffc800;
 }
 
 [data-theme="dark"] {
@@ -13,6 +14,7 @@
   --foreground: #fff;
   --border: #1f1f1f;
   --muted: #777;
+  --accent: #ffc800;
 }
 
 @theme inline {
@@ -62,7 +64,9 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  border-bottom: 1px solid var(--foreground);
   margin-bottom: 48px;
+  padding-bottom: 14px;
 }
 
 .handle {
@@ -104,6 +108,28 @@ button {
 .toggle a:hover,
 .toggle .active,
 .contact a:hover {
+  border-color: var(--foreground);
+}
+
+.profile-identity {
+  margin-bottom: 48px;
+}
+
+.profile-kicker {
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.profile-identity a {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1px;
+  font-size: 18px;
+}
+
+.profile-identity a:hover {
   border-color: var(--foreground);
 }
 
@@ -211,6 +237,14 @@ button {
   white-space: nowrap;
 }
 
+.profile-hero-num {
+  font-size: clamp(
+    58px,
+    min(13vw, calc(96vw / max(var(--digit-count), 6))),
+    138px
+  );
+}
+
 .hero-sub {
   margin-top: 12px;
   font-size: 11px;
@@ -218,8 +252,54 @@ button {
   text-transform: uppercase;
 }
 
+.permission-notice {
+  border-top: 1px solid var(--foreground);
+  border-bottom: 1px solid var(--border);
+  margin: -24px 0 48px;
+  padding: 14px 0 16px;
+}
+
+.permission-notice h2 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.permission-notice p {
+  max-width: 640px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.permission-notice-action {
+  margin-top: 12px;
+}
+
+.connect-title {
+  margin: 0;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: clamp(42px, 8vw, 86px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.connect-copy {
+  max-width: 620px;
+  margin: 20px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 .section {
   margin-top: 64px;
+}
+
+.compact-section {
+  margin-top: 44px;
 }
 
 .section-head {
@@ -230,6 +310,90 @@ button {
   font-weight: 400;
   letter-spacing: 0;
   text-transform: uppercase;
+}
+
+.stats-tabs {
+  margin-top: 4px;
+}
+
+.tabs-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.tabs-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.tab-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: auto;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: 0 0 2px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.tab-button[aria-selected="true"] {
+  border-bottom-color: var(--foreground);
+  color: var(--foreground);
+}
+
+.tab-button.active {
+  border-bottom-color: var(--foreground);
+  color: var(--foreground);
+}
+
+.tab-button:hover:not([aria-selected="true"]):not(.active) {
+  border-bottom-color: var(--border);
+  color: var(--foreground);
+}
+
+.period-date {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-align: right;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.period-date::before {
+  content: "";
+  display: block;
+  width: 72px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+  .tabs-head {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .period-date {
+    justify-content: flex-end;
+  }
+
+  .period-date::before {
+    flex: 1;
+    width: auto;
+  }
 }
 
 .toggle {
@@ -285,6 +449,149 @@ button {
 .row-link:hover .label,
 .row-link:hover .val {
   text-decoration: underline;
+}
+
+.repo-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+}
+
+.repo-meta {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.repo-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.repo-link {
+  border-bottom: 1px solid transparent;
+  padding-bottom: 1px;
+}
+
+.repo-row:hover .repo-link {
+  border-color: var(--foreground);
+}
+
+.repo-scope {
+  flex: 0 0 auto;
+  border: 1px solid var(--accent);
+  padding: 2px 6px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 9px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.repo-row:hover .repo-scope {
+  background: var(--accent);
+  color: #000;
+}
+
+.repo-scope.private {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted);
+}
+
+.repo-row:hover .repo-scope.private {
+  background: transparent;
+  color: var(--muted);
+}
+
+.repo-lines {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.leaderboard-row {
+  color: var(--foreground);
+  padding: 11px 0;
+}
+
+.leaderboard-meta {
+  gap: 12px;
+}
+
+.leaderboard-rank {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.leaderboard-row .repo-lines {
+  font-size: 20px;
+}
+
+.permission-list {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.example-list {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.permission-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.example-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.example-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.example-row span:first-child {
+  color: var(--muted);
+}
+
+.permission-row span:last-child {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.connect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 32px;
+}
+
+.connect-actions-primary {
+  margin-top: 24px;
 }
 
 .label,
@@ -346,10 +653,14 @@ button {
 .bar {
   width: 100%;
   min-height: 2px;
-  background: var(--border);
+  background: color-mix(in srgb, var(--foreground) 14%, var(--background));
 }
 
 .bar-active {
+  background: var(--accent);
+}
+
+.bar:not(.bar-active)[style*="%"] {
   background: var(--foreground);
 }
 
@@ -476,6 +787,125 @@ button {
 .button:hover {
   background: var(--foreground);
   color: var(--background);
+}
+
+.cta-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #000;
+}
+
+.cta-button:hover {
+  border-color: var(--foreground);
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.icon-button {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.icon-button:hover {
+  color: var(--foreground);
+}
+
+.icon-button svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.icon-button svg circle {
+  fill: none;
+}
+
+.icon-button .theme-toggle-sun {
+  display: none;
+}
+
+.icon-button .theme-toggle-moon {
+  display: block;
+}
+
+[data-theme="dark"] .icon-button .theme-toggle-moon {
+  display: none;
+}
+
+[data-theme="dark"] .icon-button .theme-toggle-sun {
+  display: block;
+}
+
+.github-connect-button {
+  position: relative;
+  min-height: 52px;
+  width: min(100%, 360px);
+  border-color: var(--accent);
+  padding: 0 18px;
+  background: var(--accent);
+  color: #000;
+  font-size: 12px;
+  overflow: hidden;
+  animation: connect-pulse 1800ms ease-in-out infinite;
+}
+
+.github-connect-button::after {
+  content: "→";
+  margin-left: 10px;
+  animation: connect-arrow 900ms ease-in-out infinite;
+}
+
+.github-connect-button:hover {
+  background: var(--foreground);
+  border-color: var(--foreground);
+  color: var(--background);
+  animation-play-state: paused;
+}
+
+@keyframes connect-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+@keyframes connect-arrow {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  50% {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .github-connect-button,
+  .github-connect-button::after {
+    animation: none;
+  }
+}
+
+.button-secondary {
+  border-color: var(--border);
 }
 
 .site-footer {

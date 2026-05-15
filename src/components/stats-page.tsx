@@ -1,12 +1,16 @@
 import Link from "next/link";
-import { ActivityChart } from "@/components/activity-chart";
-import { MetricStrip } from "@/components/metric-strip";
-import { RepoList } from "@/components/repo-list";
+import { GitHubPermissionNotice } from "@/components/github-permission-notice";
 import { ShareButton } from "@/components/share-button";
-import { formatLines, signedLines } from "@/lib/format";
+import { StatsTabs } from "@/components/stats-tabs";
 import type { StatsPayload } from "@/lib/types";
 
-export function StatsPage({ stats }: { stats: StatsPayload }) {
+export function StatsPage({
+  stats,
+  showPermissionNotice = false,
+}: {
+  stats: StatsPayload;
+  showPermissionNotice?: boolean;
+}) {
   return (
     <main className="wrap">
       <div className="topline">
@@ -22,56 +26,18 @@ export function StatsPage({ stats }: { stats: StatsPayload }) {
         />
       </div>
 
-      <div className="handle">
-        <a href={`https://github.com/${stats.username}`}>@{stats.username}</a>
+      <div className="profile-identity">
+        <div className="profile-kicker">github user</div>
+        <a
+          href={`https://github.com/${stats.username}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          @{stats.username}
+        </a>
       </div>
-      <div className="date">{stats.today.date}</div>
-      <div className="hero-num">{signedLines(stats.today.lines)}</div>
-      <div className="hero-sub">lines shipped today</div>
-
-      <MetricStrip
-        lines={stats.today.lines}
-        commits={stats.today.commits}
-        prs={stats.today.prs}
-      />
-
-      <section className="section">
-        <h2 className="section-head">last 7 days</h2>
-        <ActivityChart byDay={stats.byDay} today={stats.today.date} />
-      </section>
-
-      <section className="section">
-        <h2 className="section-head">today by project</h2>
-        <RepoList repos={stats.today.byRepo} />
-      </section>
-
-      <section className="section">
-        <h2 className="section-head">yesterday · {stats.yesterday.date}</h2>
-        <div className="sub-num">{signedLines(stats.yesterday.lines)}</div>
-        <div className="hero-sub">lines shipped</div>
-        <MetricStrip
-          lines={stats.yesterday.lines}
-          commits={stats.yesterday.commits}
-          prs={stats.yesterday.prs}
-        />
-        <RepoList repos={stats.yesterday.byRepo} />
-      </section>
-
-      <section className="section">
-        <h2 className="section-head">this week</h2>
-        <div className="sub-num">+{formatLines(stats.week.lines)}</div>
-        <div className="hero-sub">lines total</div>
-        <MetricStrip
-          lines={stats.week.lines}
-          commits={stats.week.commits}
-          prs={stats.week.prs}
-        />
-        <RepoList repos={stats.week.byRepo} limit={8} />
-      </section>
-
-      <div className="permalink">
-        <a href={`https://github.com/${stats.username}`}>github profile</a>
-      </div>
+      {showPermissionNotice ? <GitHubPermissionNotice /> : null}
+      <StatsTabs stats={stats} />
     </main>
   );
 }

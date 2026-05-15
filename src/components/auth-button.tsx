@@ -1,8 +1,17 @@
 import type { Session } from "next-auth";
-import { signInWithGithub, signOutUser } from "@/app/actions";
+import Link from "next/link";
+import { signOutUser } from "@/app/actions";
 
-export function AuthButton({ session }: { session: Session | null }) {
+export function AuthButton({
+  session,
+  isRegistered = false,
+}: {
+  session: Session | null;
+  isRegistered?: boolean;
+}) {
   if (session?.githubUsername) {
+    if (isRegistered) return null;
+
     return (
       <form action={signOutUser}>
         <button className="button" type="submit">
@@ -13,10 +22,8 @@ export function AuthButton({ session }: { session: Session | null }) {
   }
 
   return (
-    <form action={signInWithGithub}>
-      <button className="button" type="submit">
-        add yourself
-      </button>
-    </form>
+    <Link className="button cta-button" href="/connect">
+      join
+    </Link>
   );
 }

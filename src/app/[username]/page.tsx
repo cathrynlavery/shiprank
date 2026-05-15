@@ -37,7 +37,20 @@ export default async function UserPage({ params }: UserPageProps) {
   const { username } = await params;
   const [stats, session] = await Promise.all([getStats(username), auth()]);
 
-  if (stats) return <StatsPage stats={stats} />;
+  if (stats) {
+    const user =
+      session?.githubUsername === username ? await getUser(username) : null;
+
+    return (
+      <StatsPage
+        stats={stats}
+        showPermissionNotice={
+          session?.githubUsername === username &&
+          user?.tokenKind !== "github-app"
+        }
+      />
+    );
+  }
 
   if (session?.githubUsername === username) {
     const user = await getUser(username);

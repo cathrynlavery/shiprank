@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { refreshUserStats } from "@/lib/github";
-import { getAllUsers, saveStats } from "@/lib/store";
+import { getUsableGitHubToken } from "@/lib/github-token";
+import { getAllUsers, saveStats, saveUser } from "@/lib/store";
 
 export const maxDuration = 800;
 
@@ -17,7 +18,10 @@ export async function GET(request: Request) {
 
   for (const user of users) {
     try {
-      const stats = await refreshUserStats(user.username, user.token);
+      const { user: updatedUser, token } = await getUsableGitHubToken(user);
+      if (updatedUser !== user) await saveUser(updatedUser);
+
+      const stats = await refreshUserStats(user.username, token);
       await saveStats(stats);
       results.push({ username: user.username, ok: true });
     } catch (error) {

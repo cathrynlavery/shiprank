@@ -54,7 +54,13 @@ export function FirstRefresh({ username }: { username: string }) {
       </div>
 
       <div className="handle">
-        <a href={`https://github.com/${username}`}>@{username}</a>
+        <a
+          href={`https://github.com/${username}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          @{username}
+        </a>
       </div>
       <div className="hero-num">…</div>
       <div className="hero-sub">
