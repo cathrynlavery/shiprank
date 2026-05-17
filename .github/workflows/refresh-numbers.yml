@@ -1,0 +1,37 @@
+name: Refresh numbers
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+    - cron: "1 5 * * *"
+    - cron: "0 14 * * *"
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-numbers
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Refresh stats
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          REFRESH_URL: ${{ vars.SHIPRANK_REFRESH_URL || 'https://shiprank.dev/api/cron/refresh' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Missing required repository secret: CRON_SECRET" >&2
+            exit 1
+          fi
+
+          curl --fail-with-body --show-error --silent \
+            --request GET \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "$REFRESH_URL"

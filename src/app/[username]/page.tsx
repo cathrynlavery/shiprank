@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { FirstRefresh } from "@/components/first-refresh";
 import { StatsPage } from "@/components/stats-page";
 import { getStats, getUser } from "@/lib/store";
+import { statsDate } from "@/lib/stats-date";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export async function generateMetadata({
   const { username } = await params;
   const stats = await getStats(username);
   const total = stats?.today.lines ?? 0;
-  const date = stats?.today.date ?? new Date().toISOString().slice(0, 10);
+  const date = stats?.today.date ?? statsDate();
   const lines = total > 0 ? `+${total.toLocaleString("en-US")}` : "tracking";
   const title = `@${username} · ${lines} lines shipped`;
   const description = `${lines} lines shipped on ${date} · ShipRank`;

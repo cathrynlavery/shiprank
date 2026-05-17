@@ -1,5 +1,14 @@
 import { kv } from "@vercel/kv";
-import type { RepoStats, StatsPayload, StoredUser } from "@/lib/types";
+import { addStatsDays, statsDate } from "@/lib/stats-date";
+import type {
+  RepoLineStats,
+  RepoStats,
+  StatsPayload,
+  StoredUser,
+} from "@/lib/types";
+
+const LATEST_STATS_GENERATED_KEY = "stats:latest-generated";
+const COMMIT_STATS_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 function hasKv() {
   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
@@ -59,13 +68,25 @@ function safeIsoDate(value: unknown, fallback: string): string {
 }
 
 function dayBefore(isoDate: string): string {
-  const ms = new Date(`${isoDate}T00:00:00Z`).getTime();
-  if (!Number.isFinite(ms)) {
-    return new Date(Date.now() - 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
-  }
-  return new Date(ms - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return addStatsDays(isoDate, -1);
+}
+
+function validTimestamp(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? value : null;
+}
+
+function asLineStats(value: unknown) {
+  const record = asRecord(value);
+  const additions = asNumber(record.additions, -1);
+  const deletions = asNumber(record.deletions, -1);
+
+  return additions >= 0 && deletions >= 0 ? { additions, deletions } : null;
+}
+
+function commitStatsKey(repoFullName: string, sha: string) {
+  return `commit-stats:${encodeURIComponent(repoFullName)}:${sha}`;
 }
 
 export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
@@ -75,7 +96,7 @@ export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
   const week = asRecord(r.week);
   const weekByRepo = asRepoStats(week.byRepo);
   const weekLines = asNumber(week.lines ?? week.total);
-  const currentDate = now.toISOString().slice(0, 10);
+  const currentDate = statsDate(now);
   const currentYesterdayDate = dayBefore(currentDate);
 
   const todayDate = safeIsoDate(today.date, currentDate);
@@ -148,7 +169,10 @@ export async function getUser(username: string) {
 
 export async function saveStats(stats: StatsPayload) {
   if (!hasKv()) return;
-  await kv.set(`stats:${stats.username}`, stats);
+  await Promise.all([
+    kv.set(`stats:${stats.username}`, stats),
+    kv.set(LATEST_STATS_GENERATED_KEY, new Date().toISOString()),
+  ]);
 }
 
 export async function getStats(username: string) {
@@ -160,25 +184,67 @@ export async function getStats(username: string) {
 export async function getAllStats() {
   if (!hasKv()) return [];
 
-  const stats: StatsPayload[] = [];
+  const keys: string[] = [];
 
   for await (const key of kv.scanIterator({ match: "stats:*", count: 100 })) {
-    const value = await kv.get(key);
-    if (value) stats.push(normalizeStats(value));
+    if (key === LATEST_STATS_GENERATED_KEY) continue;
+    keys.push(key);
   }
 
-  return stats;
+  const values = await Promise.all(keys.map((key) => kv.get(key)));
+  return values.flatMap((value) => (value ? [normalizeStats(value)] : []));
+}
+
+export async function getLatestStatsGenerated() {
+  if (!hasKv()) return null;
+
+  const cached = validTimestamp(await kv.get(LATEST_STATS_GENERATED_KEY));
+  if (cached) return cached;
+
+  let latest: string | null = null;
+  let latestTime = 0;
+
+  for await (const key of kv.scanIterator({ match: "stats:*", count: 100 })) {
+    if (key === LATEST_STATS_GENERATED_KEY) continue;
+    const value = asRecord(await kv.get(key));
+    const generated = validTimestamp(value.generated);
+    if (!generated) continue;
+
+    const time = new Date(generated).getTime();
+    if (time <= latestTime) continue;
+
+    latest = generated;
+    latestTime = time;
+  }
+
+  return latest;
+}
+
+export async function getCachedCommitStats(repoFullName: string, sha: string) {
+  if (!hasKv()) return null;
+  return asLineStats(await kv.get(commitStatsKey(repoFullName, sha)));
+}
+
+export async function saveCachedCommitStats(
+  repoFullName: string,
+  sha: string,
+  stats: RepoLineStats,
+) {
+  if (!hasKv()) return;
+  await kv.set(commitStatsKey(repoFullName, sha), stats, {
+    ex: COMMIT_STATS_TTL_SECONDS,
+  });
 }
 
 export async function getAllUsers() {
   if (!hasKv()) return [];
 
-  const users: StoredUser[] = [];
+  const keys: string[] = [];
 
   for await (const key of kv.scanIterator({ match: "user:*", count: 100 })) {
-    const value = await kv.get<StoredUser>(key);
-    if (value) users.push(value);
+    keys.push(key);
   }
 
-  return users;
+  const values = await Promise.all(keys.map((key) => kv.get<StoredUser>(key)));
+  return values.flatMap((value) => (value ? [value] : []));
 }

@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { connection } from "next/server";
+import { timestampLabel } from "@/lib/date-label";
+import { getLatestStatsGenerated } from "@/lib/store";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,11 +22,15 @@ export const metadata: Metadata = {
 
 const themeInitScript = `(function(){try{var s=localStorage.getItem('theme');var m=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';var t=(s==='dark'||s==='light')?s:m;document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await connection();
+  const latestGenerated = await getLatestStatsGenerated();
+  const lastUpdated = latestGenerated ? timestampLabel(latestGenerated) : null;
+
   return (
     <html
       lang="en"
@@ -61,8 +68,11 @@ export default function RootLayout({
             >
               Cathryn Lavery
             </a>
-            <span className="site-footer-meta">
-              Stats refresh at 09:00 and 20:00 UTC
+            <span
+              className="site-footer-meta"
+              title={latestGenerated ?? undefined}
+            >
+              {lastUpdated ? `Last updated ${lastUpdated}` : "Stats pending"}
             </span>
           </div>
         </footer>

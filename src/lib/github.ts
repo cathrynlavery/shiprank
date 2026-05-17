@@ -4,6 +4,9 @@ import type {
   RepoStats,
   StatsPayload,
 } from "@/lib/types";
+import { mapWithConcurrency } from "@/lib/concurrency";
+import { addStatsDays, statsDate } from "@/lib/stats-date";
+import { getCachedCommitStats, saveCachedCommitStats } from "@/lib/store";
 
 type GitHubRepo = {
   full_name: string;
@@ -44,6 +47,7 @@ type GitHubInstallationReposResult = {
 };
 
 const GITHUB_API = "https://api.github.com";
+const COMMIT_STATS_CONCURRENCY = 8;
 
 async function githubGet<T>(path: string, token: string): Promise<T | null> {
   const response = await fetch(`${GITHUB_API}${path}`, {
@@ -156,15 +160,30 @@ async function getCommitStats(
   sha: string,
 ): Promise<RepoLineStats> {
   try {
+    const cached = await getCachedCommitStats(repoFullName, sha);
+    if (cached) return cached;
+  } catch (error) {
+    console.warn("Commit stats cache read failed", error);
+  }
+
+  try {
     const detail = await githubGet<GitHubCommitDetail>(
       `/repos/${repoFullName}/commits/${sha}`,
       token,
     );
 
-    return {
+    const stats = {
       additions: detail?.stats?.additions ?? 0,
       deletions: detail?.stats?.deletions ?? 0,
     };
+
+    try {
+      await saveCachedCommitStats(repoFullName, sha, stats);
+    } catch (error) {
+      console.warn("Commit stats cache write failed", error);
+    }
+
+    return stats;
   } catch {
     return { additions: 0, deletions: 0 };
   }
@@ -215,13 +234,11 @@ export async function refreshUserStats(
   token: string,
 ): Promise<StatsPayload> {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  const today = statsDate(now);
+  const yesterday = addStatsDays(today, -1);
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const weekAgoISO = weekAgo.toISOString();
-  const weekAgoDate = weekAgoISO.slice(0, 10);
+  const weekAgoDate = statsDate(weekAgo);
 
   const byDay: StatsPayload["byDay"] = {};
   const commitsByDay: Record<string, number> = {};
@@ -235,15 +252,17 @@ export async function refreshUserStats(
       weekAgoISO,
     );
 
-    for (const commit of commits) {
-      const date = commit.commit.author?.date?.slice(0, 10);
-      if (!date) continue;
+    await mapWithConcurrency(commits, COMMIT_STATS_CONCURRENCY, async (commit) => {
+      const authorDate = commit.commit.author?.date;
+      if (!authorDate) return;
+
+      const date = statsDate(new Date(authorDate));
 
       commitsByDay[date] = (commitsByDay[date] ?? 0) + 1;
       byDay[date] ??= {};
       const stats = await getCommitStats(token, repo.full_name, commit.sha);
       addRepoStats(byDay[date], repo.full_name, stats, repo.private);
-    }
+    });
   }
 
   const weekByRepo: RepoStats = {};

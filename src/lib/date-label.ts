@@ -29,3 +29,17 @@ export function weekRange(today: string) {
 
   return `${shortDate(start.toISOString().slice(0, 10))} to ${shortDate(today)}`;
 }
+
+export function timestampLabel(timestamp: string) {
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return null;
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+}

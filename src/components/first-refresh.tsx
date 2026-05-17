@@ -72,8 +72,8 @@ export function FirstRefresh({ username }: { username: string }) {
       {status === "error" ? (
         <section className="section">
           <p className="prose">
-            Stats refresh at 09:00 and 20:00 UTC. Your stats will appear then
-            even if this retry fails.{" "}
+            Stats refresh around 12:01 AM, 9 AM, 2 PM, and 9 PM Central. Your
+            stats will appear then even if this retry fails.{" "}
             <Link href="/">Back to the leaderboard</Link>.
           </p>
         </section>
