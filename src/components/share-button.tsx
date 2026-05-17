@@ -10,7 +10,7 @@ type ShareButtonProps = {
 
 function buildShareText(total: number) {
   if (total > 0) {
-    return `+${total.toLocaleString("en-US")} lines shipped today on ShipRank`;
+    return `+${total.toLocaleString("en-US")} lines shipped on ShipRank`;
   }
   return `tracking lines shipped on ShipRank`;
 }

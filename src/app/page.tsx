@@ -136,12 +136,11 @@ export default async function Home({ searchParams }: HomeProps) {
   const isRegisteredUser = Boolean(session?.githubUsername && currentUser);
 
   const noun = sortBy === "prs" ? "prs merged" : "lines shipped";
-  const rangeLabel = `${noun} ${rangeDef.label}`;
-  const developerCount =
-    devCount === 1 ? "1 developer" : `${devCount} developers`;
+  const rangeLabel = mode === "today" ? noun : `${noun} ${rangeDef.label}`;
+  const builderCount = devCount === 1 ? "1 builder" : `${devCount} builders`;
   const heroSub =
     devCount > 0
-      ? `${rangeLabel} · across ${developerCount}${
+      ? `${rangeLabel} · across ${builderCount}${
           leader ? ` · top @${leader.username}` : ""
         }`
       : rangeLabel;

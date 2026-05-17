@@ -4,13 +4,13 @@ A public leaderboard for people who ship.
 
 **Live at [shiprank.dev](https://shiprank.dev).**
 
-GitHub login → daily count of lines added across every repo you commit to → ranked against every other developer on the board. No vanity metrics, no algorithm, no "engagement." Just who shipped what.
+GitHub login → daily count of lines added across every repo you commit to → ranked against every other builder on the board. No vanity metrics, no algorithm, no "engagement." Just who shipped what.
 
 ## What you see
 
 ```
 +118,747
-LINES SHIPPED TODAY · ACROSS 2 DEVELOPERS · TOP @CATHRYNLAVERY
+LINES SHIPPED · ACROSS 2 BUILDERS · TOP @CATHRYNLAVERY
 ```
 
 Plus a 7-day activity chart, a today / yesterday / this week toggle, per-profile breakdowns (commits, merged PRs, lines added vs removed), and a share card you can post to Twitter.
