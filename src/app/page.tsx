@@ -7,6 +7,7 @@ import { GitHubPermissionNotice } from "@/components/github-permission-notice";
 import { HamburgerMenu } from "@/components/hamburger-menu";
 import { MetricStrip } from "@/components/metric-strip";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UpdateTimestamp } from "@/components/update-timestamp";
 import { shortDate, weekRange } from "@/lib/date-label";
 import { getAllStats, getUser } from "@/lib/store";
 import { statsDate } from "@/lib/stats-date";
@@ -73,6 +74,21 @@ function aggregateByDay(allStats: StatsPayload[]): StatsPayload["byDay"] {
   return out;
 }
 
+function latestGenerated(allStats: StatsPayload[]) {
+  let latest: string | null = null;
+  let latestTime = 0;
+
+  for (const stats of allStats) {
+    const time = new Date(stats.generated).getTime();
+    if (!Number.isFinite(time) || time <= latestTime) continue;
+
+    latest = stats.generated;
+    latestTime = time;
+  }
+
+  return latest;
+}
+
 export default async function Home({ searchParams }: HomeProps) {
   const [{ range, by }, session, allStats] = await Promise.all([
     searchParams,
@@ -120,15 +136,15 @@ export default async function Home({ searchParams }: HomeProps) {
   const isRegisteredUser = Boolean(session?.githubUsername && currentUser);
 
   const noun = sortBy === "prs" ? "prs merged" : "lines shipped";
-  const rangeLabel = `${noun} ${rangeDef.label}`;
-  const developerCount =
-    devCount === 1 ? "1 developer" : `${devCount} developers`;
+  const rangeLabel = mode === "today" ? noun : `${noun} ${rangeDef.label}`;
+  const builderCount = devCount === 1 ? "1 builder" : `${devCount} builders`;
   const heroSub =
     devCount > 0
-      ? `${rangeLabel} · across ${developerCount}${
+      ? `${rangeLabel} · across ${builderCount}${
           leader ? ` · top @${leader.username}` : ""
         }`
       : rangeLabel;
+  const generated = latestGenerated(allStats);
 
   function buildHref({
     nextRange,
@@ -166,6 +182,7 @@ export default async function Home({ searchParams }: HomeProps) {
       </div>
 
       <p className="tagline">A public leaderboard for people who ship.</p>
+      <UpdateTimestamp generated={generated} />
       {showPermissionNotice ? <GitHubPermissionNotice /> : null}
 
       <div className="tabs-head">
@@ -255,8 +272,8 @@ export default async function Home({ searchParams }: HomeProps) {
           <summary className="section-head">what we store</summary>
           <p className="prose">
             We store your GitHub username, GitHub token, and recent line-count
-            stats so daily refreshes can run. Tokens are used only for read-only
-            stats generation.
+            stats so scheduled refreshes can run. Tokens are used only for
+            read-only stats generation.
           </p>
         </details>
 

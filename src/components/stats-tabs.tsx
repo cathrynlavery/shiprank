@@ -36,7 +36,7 @@ export function StatsTabs({ stats }: { stats: StatsPayload }) {
       dateLabel: shortDate(stats.today.date),
       summary: stats.today,
       hero: signedLines(stats.today.lines),
-      subhead: "lines shipped today",
+      subhead: "lines shipped",
       projectHead: "today by project",
       showChart: true,
     },

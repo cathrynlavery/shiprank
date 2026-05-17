@@ -89,7 +89,7 @@ export default async function OpengraphImage({ params }: Props) {
             textTransform: "uppercase",
           }}
         >
-          lines shipped today · @{username}
+          lines shipped · @{username}
         </div>
       </div>
 
