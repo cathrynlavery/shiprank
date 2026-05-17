@@ -29,7 +29,7 @@ Private repos count toward your total, but their contents stay private:
 - Next.js 16 App Router · TypeScript
 - Auth.js v5 (GitHub sign-in, scopes: `read:user user:email`)
 - Vercel KV (Upstash Redis)
-- Vercel Cron / GitHub Actions — refresh around 12:01 AM, 9 AM, 2 PM, and 9 PM Central
+- GitHub Actions scheduled refreshes every 2 hours from 8 AM to midnight Central
 - `next/og` for Twitter / OG share cards
 - Geist + Geist Mono, dark/light mode, no CSS framework
 
@@ -68,13 +68,16 @@ https://your-deployment.vercel.app/api/auth/callback/github
 
 ## Manual refresh
 
-The Vercel cron jobs are configured in `vercel.json`. They currently run at
-02:00, 05:01, 14:00, and 19:00 UTC, matching 9 PM, 12:01 AM, 9 AM, and 2 PM
-Central during daylight saving time. GitHub Actions also runs
-`.github/workflows/refresh-numbers.yml` on the same schedule as a backup. Add a
-repository secret named `CRON_SECRET` with the same value used by the
-deployment. If the endpoint is not `https://shiprank.dev/api/cron/refresh`, set
-a repository variable named `SHIPRANK_REFRESH_URL`.
+GitHub Actions runs `.github/workflows/refresh-numbers.yml` hourly and only
+calls the refresh endpoint during the America/Chicago windows for 8 AM, 10 AM,
+12 PM, 2 PM, 4 PM, 6 PM, 8 PM, 10 PM, and midnight. Add a repository secret
+named `CRON_SECRET` with the same value used by the deployment. If the endpoint
+is not `https://shiprank.dev/api/cron/refresh`, set a repository variable named
+`SHIPRANK_REFRESH_URL`.
+
+`vercel.json` keeps a daily Vercel Cron fallback at 05:01 UTC. Vercel Hobby
+cron jobs are limited to daily schedules, so the more frequent refresh cadence
+runs from GitHub Actions instead.
 
 To force a refresh:
 

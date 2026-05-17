@@ -2,10 +2,7 @@ name: Refresh numbers
 
 on:
   schedule:
-    - cron: "0 2 * * *"
-    - cron: "1 5 * * *"
-    - cron: "0 14 * * *"
-    - cron: "0 19 * * *"
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -21,7 +18,24 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Check refresh window
+        id: refresh-window
+        if: github.event_name == 'schedule'
+        run: |
+          local_hour="$(TZ=America/Chicago date +%H)"
+          case "$local_hour" in
+            00|08|10|12|14|16|18|20|22)
+              echo "Refreshing for Central hour $local_hour"
+              echo "run_refresh=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Skipping Central hour $local_hour"
+              echo "run_refresh=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       - name: Refresh stats
+        if: github.event_name == 'workflow_dispatch' || steps.refresh-window.outputs.run_refresh == 'true'
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           REFRESH_URL: ${{ vars.SHIPRANK_REFRESH_URL || 'https://shiprank.dev/api/cron/refresh' }}

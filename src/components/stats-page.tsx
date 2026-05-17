@@ -2,6 +2,7 @@ import Link from "next/link";
 import { GitHubPermissionNotice } from "@/components/github-permission-notice";
 import { ShareButton } from "@/components/share-button";
 import { StatsTabs } from "@/components/stats-tabs";
+import { UpdateTimestamp } from "@/components/update-timestamp";
 import type { StatsPayload } from "@/lib/types";
 
 export function StatsPage({
@@ -36,6 +37,7 @@ export function StatsPage({
           @{stats.username}
         </a>
       </div>
+      <UpdateTimestamp generated={stats.generated} />
       {showPermissionNotice ? <GitHubPermissionNotice /> : null}
       <StatsTabs stats={stats} />
     </main>

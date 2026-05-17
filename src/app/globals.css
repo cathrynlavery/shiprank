@@ -133,6 +133,15 @@ button {
   border-color: var(--foreground);
 }
 
+.update-timestamp {
+  margin: -32px 0 40px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
 .topline-actions {
   display: flex;
   flex-wrap: wrap;
