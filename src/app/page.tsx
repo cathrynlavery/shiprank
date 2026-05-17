@@ -9,6 +9,7 @@ import { MetricStrip } from "@/components/metric-strip";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { shortDate, weekRange } from "@/lib/date-label";
 import { getAllStats, getUser } from "@/lib/store";
+import { statsDate } from "@/lib/stats-date";
 import type { PeriodSummary, RepoStats, StatsPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -98,7 +99,7 @@ export default async function Home({ searchParams }: HomeProps) {
     );
 
   const leader = leaderboard[0];
-  const heroDate = leader?.date ?? new Date().toISOString().slice(0, 10);
+  const heroDate = leader?.date ?? statsDate();
   const heroDateLabel =
     mode === "week" ? weekRange(heroDate) : shortDate(heroDate);
   const heroLines = leaderboard.reduce((sum, entry) => sum + entry.lines, 0);

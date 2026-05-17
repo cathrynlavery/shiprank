@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { getStats } from "@/lib/store";
 import { signedLines } from "@/lib/format";
+import { statsDate } from "@/lib/stats-date";
 
 export const runtime = "nodejs";
 export const contentType = "image/png";
@@ -33,7 +34,7 @@ export default async function OpengraphImage({ params }: Props) {
     loadFont("Geist+Mono", 400),
   ]);
 
-  const today = stats?.today.date ?? new Date().toISOString().slice(0, 10);
+  const today = stats?.today.date ?? statsDate();
   const lines = stats?.today.lines ?? 0;
   const net = stats?.today.net ?? 0;
   const commits = stats?.today.commits ?? 0;

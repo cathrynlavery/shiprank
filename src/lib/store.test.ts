@@ -166,6 +166,35 @@ describe("normalizeStats", () => {
     });
   });
 
+  it("does not promote today during the UTC-only rollover before the stats day changes", () => {
+    const stats = normalizeAt(
+      {
+        today: {
+          date: "2026-05-15",
+          lines: 120,
+          net: 90,
+          commits: 4,
+          prs: 2,
+          byRepo: { "ada/repo": { additions: 120, deletions: 30 } },
+        },
+        yesterday: {
+          date: "2026-05-14",
+          lines: 40,
+          net: 35,
+          commits: 1,
+          prs: 0,
+          byRepo: { "ada/old": { additions: 40, deletions: 5 } },
+        },
+      },
+      "2026-05-16T02:00:00.000Z",
+    );
+
+    expect(stats.today.date).toBe("2026-05-15");
+    expect(stats.today.lines).toBe(120);
+    expect(stats.yesterday.date).toBe("2026-05-14");
+    expect(stats.yesterday.lines).toBe(40);
+  });
+
   it("derives yesterday from byDay when the stored today snapshot is older than yesterday", () => {
     const stats = normalizeAt(
       {
