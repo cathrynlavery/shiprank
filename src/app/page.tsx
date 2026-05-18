@@ -45,8 +45,8 @@ const RANGES: Record<RangeKey, RangeDef> = {
     date: (s) => s.yesterday.date,
   },
   week: {
-    label: "this week",
-    toggleLabel: "this week",
+    label: "last 7 days",
+    toggleLabel: "last 7 days",
     period: (s) => s.week,
     date: (s) => s.today.date,
   },
@@ -132,7 +132,10 @@ export default async function Home({ searchParams }: HomeProps) {
     ? await getUser(session.githubUsername)
     : null;
   const showPermissionNotice =
-    Boolean(session?.githubUsername) && currentUser?.tokenKind !== "github-app";
+    Boolean(session?.githubUsername) &&
+    Boolean(currentUser?.token) &&
+    currentUser?.tokenKind !== "github-app" &&
+    !currentUser?.oauth?.accessToken;
   const isRegisteredUser = Boolean(session?.githubUsername && currentUser);
 
   const noun = sortBy === "prs" ? "prs merged" : "lines shipped";

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { refreshUserStats } from "@/lib/github";
-import { getUsableGitHubToken } from "@/lib/github-token";
 import { getAllUsers, saveStats, saveUser } from "@/lib/store";
 import type { StoredUser } from "@/lib/types";
 
@@ -17,10 +16,8 @@ type RefreshResult = {
 
 async function refreshStoredUser(user: StoredUser): Promise<RefreshResult> {
   try {
-    const { user: updatedUser, token } = await getUsableGitHubToken(user);
+    const { stats, user: updatedUser } = await refreshUserStats(user);
     if (updatedUser !== user) await saveUser(updatedUser);
-
-    const stats = await refreshUserStats(user.username, token);
     await saveStats(stats);
     return { username: user.username, ok: true };
   } catch (error) {

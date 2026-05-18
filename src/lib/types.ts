@@ -21,16 +21,31 @@ export type StatsPayload = {
   yesterday: PeriodSummary & { date: string };
   week: PeriodSummary;
   byDay: Record<string, RepoStats>;
+  byDayCommits?: Record<string, number>;
+};
+
+export type OAuthTokenGrant = {
+  accessToken: string;
+  refreshToken?: string;
+  accessTokenExpiresAt?: number;
+  refreshTokenExpiresAt?: number;
+  grantedAt: string;
+  revokedAt?: string;
+  scope?: string;
 };
 
 export type StoredUser = {
   username: string;
-  token: string;
+  githubUserId?: number;
+  token?: string;
   accessToken?: string;
   accessTokenExpiresAt?: number;
   refreshToken?: string;
   refreshTokenExpiresAt?: number;
   tokenKind?: "oauth" | "github-app";
+  oauth?: OAuthTokenGrant;
+  byDayInvalidUntil?: string;
+  byDayTokenSource?: "oauth" | "app";
   registeredAt: string;
   name?: string | null;
   image?: string | null;

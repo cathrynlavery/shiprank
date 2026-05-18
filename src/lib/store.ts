@@ -1,4 +1,5 @@
 import { kv } from "@vercel/kv";
+import { decryptToken, encryptToken, isEncryptedToken } from "@/lib/crypto";
 import { addStatsDays, statsDate } from "@/lib/stats-date";
 import type {
   RepoLineStats,
@@ -9,6 +10,7 @@ import type {
 
 const LATEST_STATS_GENERATED_KEY = "stats:latest-generated";
 const COMMIT_STATS_TTL_SECONDS = 60 * 60 * 24 * 30;
+const TOKEN_AUDIT_TTL_SECONDS = 60 * 60 * 24 * 90;
 
 function hasKv() {
   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
@@ -27,6 +29,100 @@ function asNumber(value: unknown, fallback = 0): number {
 function asRepoStats(value: unknown): RepoStats {
   if (!value || typeof value !== "object") return {};
   return value as RepoStats;
+}
+
+function cloneUser(user: StoredUser): StoredUser {
+  return {
+    ...user,
+    oauth: user.oauth ? { ...user.oauth } : undefined,
+  };
+}
+
+function encryptUserForStorage(user: StoredUser): StoredUser {
+  const encrypted = cloneUser(user);
+  if (encrypted.token) encrypted.token = encryptToken(encrypted.token);
+  if (encrypted.accessToken) {
+    encrypted.accessToken = encryptToken(encrypted.accessToken);
+  }
+  if (encrypted.refreshToken) {
+    encrypted.refreshToken = encryptToken(encrypted.refreshToken);
+  }
+  if (encrypted.oauth?.accessToken) {
+    encrypted.oauth.accessToken = encryptToken(encrypted.oauth.accessToken);
+  }
+  if (encrypted.oauth?.refreshToken) {
+    encrypted.oauth.refreshToken = encryptToken(encrypted.oauth.refreshToken);
+  }
+  return encrypted;
+}
+
+function decryptTokenField(
+  value: string | undefined,
+): { value: string | undefined; migrated: boolean } {
+  if (!value) return { value, migrated: false };
+  return decryptToken(value);
+}
+
+export function decryptUserFromStorage(raw: StoredUser): {
+  user: StoredUser;
+  migrated: boolean;
+} {
+  const user = cloneUser(raw);
+  let migrated = false;
+
+  const token = decryptTokenField(user.token);
+  user.token = token.value;
+  migrated ||= token.migrated;
+
+  const accessToken = decryptTokenField(user.accessToken);
+  user.accessToken = accessToken.value;
+  migrated ||= accessToken.migrated;
+
+  const refreshToken = decryptTokenField(user.refreshToken);
+  user.refreshToken = refreshToken.value;
+  migrated ||= refreshToken.migrated;
+
+  if (user.oauth) {
+    const oauthAccessToken = decryptTokenField(user.oauth.accessToken);
+    user.oauth.accessToken = oauthAccessToken.value ?? user.oauth.accessToken;
+    migrated ||= oauthAccessToken.migrated;
+
+    const oauthRefreshToken = decryptTokenField(user.oauth.refreshToken);
+    user.oauth.refreshToken = oauthRefreshToken.value;
+    migrated ||= oauthRefreshToken.migrated;
+  }
+
+  return { user, migrated };
+}
+
+function tokenFields(user: StoredUser) {
+  const fields: string[] = [];
+  if (user.token) fields.push("token");
+  if (user.accessToken) fields.push("accessToken");
+  if (user.refreshToken) fields.push("refreshToken");
+  if (user.oauth?.accessToken) fields.push("oauth.accessToken");
+  if (user.oauth?.refreshToken) fields.push("oauth.refreshToken");
+  return fields;
+}
+
+async function auditTokenRead(user: StoredUser, fields: string[]) {
+  if (!fields.length || !hasKv()) return;
+  const date = new Date().toISOString().slice(0, 10);
+  const key = `audit:token-reads:${date}`;
+
+  try {
+    await kv.lpush(
+      key,
+      JSON.stringify({
+        username: user.username,
+        fields,
+        readAt: new Date().toISOString(),
+      }),
+    );
+    await kv.expire(key, TOKEN_AUDIT_TTL_SECONDS);
+  } catch (error) {
+    console.warn("Token read audit failed", error);
+  }
 }
 
 function netFromRepos(repos: RepoStats) {
@@ -106,6 +202,10 @@ export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
     r.byDay && typeof r.byDay === "object"
       ? (r.byDay as StatsPayload["byDay"])
       : {};
+  const byDayCommits: StatsPayload["byDayCommits"] =
+    r.byDayCommits && typeof r.byDayCommits === "object"
+      ? (r.byDayCommits as StatsPayload["byDayCommits"])
+      : {};
 
   const storedToday = normalizePeriod(today, byDay[todayDate] ?? {});
   const storedYesterday = normalizePeriod(
@@ -154,17 +254,24 @@ export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
       byRepo: weekByRepo,
     },
     byDay,
+    byDayCommits,
   };
 }
 
 export async function saveUser(user: StoredUser) {
   if (!hasKv()) return;
-  await kv.set(`user:${user.username}`, user);
+  await kv.set(`user:${user.username}`, encryptUserForStorage(user));
 }
 
 export async function getUser(username: string) {
   if (!hasKv()) return null;
-  return (await kv.get<StoredUser>(`user:${username}`)) ?? null;
+  const raw = await kv.get<StoredUser>(`user:${username}`);
+  if (!raw) return null;
+
+  const { user, migrated } = decryptUserFromStorage(raw);
+  await auditTokenRead(user, tokenFields(user));
+  if (migrated) await saveUser(user);
+  return user;
 }
 
 export async function saveStats(stats: StatsPayload) {
@@ -246,5 +353,65 @@ export async function getAllUsers() {
   }
 
   const values = await Promise.all(keys.map((key) => kv.get<StoredUser>(key)));
-  return values.flatMap((value) => (value ? [value] : []));
+  const users = await Promise.all(
+    values.flatMap((value) => {
+      if (!value) return [];
+      const { user, migrated } = decryptUserFromStorage(value);
+      return [
+        (async () => {
+          await auditTokenRead(user, tokenFields(user));
+          if (migrated) await saveUser(user);
+          return user;
+        })(),
+      ];
+    }),
+  );
+
+  return users;
+}
+
+export function mergeByDayStats({
+  existing,
+  fresh,
+  today,
+  keepDays = 30,
+}: {
+  existing: StatsPayload["byDay"];
+  fresh: StatsPayload["byDay"];
+  today: string;
+  keepDays?: number;
+}) {
+  const cutoff = addStatsDays(today, -(keepDays - 1));
+  const merged: StatsPayload["byDay"] = {};
+
+  for (const [date, repos] of Object.entries({ ...existing, ...fresh })) {
+    if (date >= cutoff && date <= today) merged[date] = repos;
+  }
+
+  return merged;
+}
+
+export function mergeByDayCommits({
+  existing,
+  fresh,
+  today,
+  keepDays = 30,
+}: {
+  existing: Record<string, number>;
+  fresh: Record<string, number>;
+  today: string;
+  keepDays?: number;
+}) {
+  const cutoff = addStatsDays(today, -(keepDays - 1));
+  const merged: Record<string, number> = {};
+
+  for (const [date, count] of Object.entries({ ...existing, ...fresh })) {
+    if (date >= cutoff && date <= today) merged[date] = count;
+  }
+
+  return merged;
+}
+
+export function isStoredTokenEncrypted(value: string): boolean {
+  return isEncryptedToken(value);
 }

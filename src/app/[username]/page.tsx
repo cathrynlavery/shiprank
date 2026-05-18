@@ -2,7 +2,13 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { FirstRefresh } from "@/components/first-refresh";
+import { ManualRefreshButton } from "@/components/manual-refresh-button";
+import { OAuthStateBanner } from "@/components/oauth-state-banner";
 import { StatsPage } from "@/components/stats-page";
+import {
+  githubFullSettingsUrl,
+  signInWithGithubFullEnabled,
+} from "@/lib/oauth-config";
 import { getStats, getUser } from "@/lib/store";
 import { statsDate } from "@/lib/stats-date";
 
@@ -39,15 +45,32 @@ export default async function UserPage({ params }: UserPageProps) {
   const [stats, session] = await Promise.all([getStats(username), auth()]);
 
   if (stats) {
+    const isOwnProfile = session?.githubUsername === username;
     const user =
-      session?.githubUsername === username ? await getUser(username) : null;
+      isOwnProfile ? await getUser(username) : null;
+    const oauthState =
+      user?.oauth?.revokedAt
+        ? "revoked"
+        : user?.oauth?.accessToken
+          ? "opted-in"
+          : "not-opted-in";
 
     return (
       <StatsPage
         stats={stats}
-        showPermissionNotice={
-          session?.githubUsername === username &&
-          user?.tokenKind !== "github-app"
+        ownerControls={
+          isOwnProfile ? (
+            <>
+              <ManualRefreshButton />
+              <OAuthStateBanner
+                enabled={signInWithGithubFullEnabled()}
+                state={oauthState}
+                revokedAt={user?.oauth?.revokedAt}
+                settingsUrl={githubFullSettingsUrl()}
+                username={username}
+              />
+            </>
+          ) : null
         }
       />
     );
