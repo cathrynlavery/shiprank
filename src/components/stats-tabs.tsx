@@ -51,17 +51,18 @@ export function StatsTabs({ stats }: { stats: StatsPayload }) {
     },
     {
       key: "week",
-      label: "THIS WEEK",
+      label: "LAST 7 DAYS",
       dateLabel: weekRange(stats.today.date),
       summary: stats.week,
       hero: `+${formatLines(stats.week.lines)}`,
-      subhead: "lines this week",
-      projectHead: "this week by project",
+      subhead: "lines in the last 7 days",
+      projectHead: "last 7 days by project",
       showChart: true,
       repoLimit: 8,
     },
   ];
-  const active = periods.find((period) => period.key === activeKey) ?? periods[0];
+  const active =
+    periods.find((period) => period.key === activeKey) ?? periods[0];
 
   return (
     <section className="stats-tabs" aria-label="profile stats">

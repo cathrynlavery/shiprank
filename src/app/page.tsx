@@ -45,8 +45,8 @@ const RANGES: Record<RangeKey, RangeDef> = {
     date: (s) => s.yesterday.date,
   },
   week: {
-    label: "this week",
-    toggleLabel: "this week",
+    label: "last 7 days",
+    toggleLabel: "last 7 days",
     period: (s) => s.week,
     date: (s) => s.today.date,
   },
