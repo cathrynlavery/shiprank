@@ -46,8 +46,7 @@ export default async function UserPage({ params }: UserPageProps) {
 
   if (stats) {
     const isOwnProfile = session?.githubUsername === username;
-    const user =
-      isOwnProfile ? await getUser(username) : null;
+    const user = isOwnProfile ? await getUser(username) : null;
     const oauthState =
       user?.oauth?.revokedAt
         ? "revoked"
@@ -58,18 +57,16 @@ export default async function UserPage({ params }: UserPageProps) {
     return (
       <StatsPage
         stats={stats}
-        ownerControls={
+        ownerTopControls={isOwnProfile ? <ManualRefreshButton /> : null}
+        ownerBottomControls={
           isOwnProfile ? (
-            <>
-              <ManualRefreshButton />
-              <OAuthStateBanner
-                enabled={signInWithGithubFullEnabled()}
-                state={oauthState}
-                revokedAt={user?.oauth?.revokedAt}
-                settingsUrl={githubFullSettingsUrl()}
-                username={username}
-              />
-            </>
+            <OAuthStateBanner
+              enabled={signInWithGithubFullEnabled()}
+              state={oauthState}
+              revokedAt={user?.oauth?.revokedAt}
+              settingsUrl={githubFullSettingsUrl()}
+              username={username}
+            />
           ) : null
         }
       />

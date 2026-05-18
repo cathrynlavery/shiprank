@@ -7,10 +7,12 @@ import type { ReactNode } from "react";
 
 export function StatsPage({
   stats,
-  ownerControls,
+  ownerTopControls,
+  ownerBottomControls,
 }: {
   stats: StatsPayload;
-  ownerControls?: ReactNode;
+  ownerTopControls?: ReactNode;
+  ownerBottomControls?: ReactNode;
 }) {
   return (
     <main className="wrap">
@@ -38,8 +40,9 @@ export function StatsPage({
         </a>
       </div>
       <UpdateTimestamp generated={stats.generated} />
-      {ownerControls}
+      {ownerTopControls}
       <StatsTabs stats={stats} />
+      {ownerBottomControls}
     </main>
   );
 }

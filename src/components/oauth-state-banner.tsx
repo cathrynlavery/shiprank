@@ -1,7 +1,3 @@
-"use client";
-
-import { signIn } from "next-auth/react";
-
 type OAuthState = "not-opted-in" | "opted-in" | "revoked";
 
 export function OAuthStateBanner({
@@ -17,10 +13,7 @@ export function OAuthStateBanner({
   settingsUrl: string;
   username: string;
 }) {
-  const reconnect = () => {
-    if (!enabled) return;
-    void signIn("github-full", { callbackUrl: `/${username}` });
-  };
+  const signInHref = `/api/auth/signin/github-full?callbackUrl=${encodeURIComponent(`/${username}`)}`;
 
   if (state === "opted-in") {
     return (
@@ -32,9 +25,9 @@ export function OAuthStateBanner({
         </p>
         <div className="permission-notice-action">
           {enabled ? (
-            <button className="button cta-button" type="button" onClick={reconnect}>
+            <a className="button cta-button" href={signInHref}>
               reconnect
-            </button>
+            </a>
           ) : null}
           <a className="button button-secondary" href={settingsUrl}>
             revoke in github
@@ -58,14 +51,15 @@ export function OAuthStateBanner({
         <h2>full visibility disconnected</h2>
         <p>Full visibility was disconnected on {date}. Reconnect?</p>
         <div className="permission-notice-action">
-          <button
-            className="button cta-button"
-            type="button"
-            onClick={reconnect}
-            disabled={!enabled}
-          >
-            reconnect
-          </button>
+          {enabled ? (
+            <a className="button cta-button" href={signInHref}>
+              reconnect
+            </a>
+          ) : (
+            <button className="button cta-button" type="button" disabled>
+              reconnect
+            </button>
+          )}
         </div>
       </section>
     );
@@ -82,14 +76,15 @@ export function OAuthStateBanner({
         names, commit messages, or code.
       </p>
       <div className="permission-notice-action">
-        <button
-          className="button cta-button"
-          type="button"
-          onClick={reconnect}
-          disabled={!enabled}
-        >
-          grant full visibility
-        </button>
+        {enabled ? (
+          <a className="button cta-button" href={signInHref}>
+            grant full visibility
+          </a>
+        ) : (
+          <button className="button cta-button" type="button" disabled>
+            grant full visibility
+          </button>
+        )}
       </div>
     </section>
   );
