@@ -8,19 +8,21 @@ import { mapWithConcurrency } from "@/lib/concurrency";
 import { addStatsDays, statsDate } from "@/lib/stats-date";
 import { getCachedCommitStats, saveCachedCommitStats } from "@/lib/store";
 
-type GitHubRepo = {
-  full_name: string;
-  private: boolean;
-  pushed_at: string;
-};
-
-type GitHubCommit = {
+type GitHubCommitSearchItem = {
   sha: string;
   commit: {
     author?: {
       date?: string;
     };
   };
+  repository: {
+    full_name: string;
+    private: boolean;
+  };
+};
+
+type GitHubCommitSearchResult = {
+  items?: GitHubCommitSearchItem[];
 };
 
 type GitHubCommitDetail = {
@@ -34,20 +36,9 @@ type GitHubSearchResult = {
   total_count: number;
 };
 
-type GitHubInstallation = {
-  id: number;
-};
-
-type GitHubInstallationsResult = {
-  installations?: GitHubInstallation[];
-};
-
-type GitHubInstallationReposResult = {
-  repositories?: GitHubRepo[];
-};
-
 const GITHUB_API = "https://api.github.com";
 const COMMIT_STATS_CONCURRENCY = 8;
+const COMMIT_SEARCH_MAX_PAGES = 10;
 
 async function githubGet<T>(path: string, token: string): Promise<T | null> {
   const response = await fetch(`${GITHUB_API}${path}`, {
@@ -70,88 +61,30 @@ async function githubGet<T>(path: string, token: string): Promise<T | null> {
   return (await response.json()) as T;
 }
 
-async function getRecentOAuthRepos(token: string, weekAgoISO: string) {
-  const repos: GitHubRepo[] = [];
-
-  for (let page = 1; page <= 5; page++) {
-    const batch = await githubGet<GitHubRepo[]>(
-      `/user/repos?per_page=100&sort=pushed&direction=desc&page=${page}`,
-      token,
-    );
-
-    if (!batch?.length) break;
-
-    repos.push(...batch);
-
-    const oldest = batch[batch.length - 1];
-    if (oldest?.pushed_at && oldest.pushed_at < weekAgoISO) break;
-  }
-
-  return repos.filter((repo) => repo.pushed_at >= weekAgoISO);
-}
-
-async function getGitHubAppRepos(token: string) {
-  const repos = new Map<string, GitHubRepo>();
-  const installations = await githubGet<GitHubInstallationsResult>(
-    "/user/installations?per_page=100",
-    token,
-  );
-
-  for (const installation of installations?.installations ?? []) {
-    for (let page = 1; page <= 5; page++) {
-      const batch = await githubGet<GitHubInstallationReposResult>(
-        `/user/installations/${installation.id}/repositories?per_page=100&page=${page}`,
-        token,
-      );
-      const repositories = batch?.repositories ?? [];
-      if (!repositories.length) break;
-
-      for (const repo of repositories) {
-        repos.set(repo.full_name, repo);
-      }
-
-      if (repositories.length < 100) break;
-    }
-  }
-
-  return [...repos.values()];
-}
-
-async function getRecentRepos(token: string, weekAgoISO: string) {
-  try {
-    const repos = await getGitHubAppRepos(token);
-    if (repos.length) {
-      return repos.filter((repo) => repo.pushed_at >= weekAgoISO);
-    }
-  } catch (error) {
-    console.warn("Falling back to OAuth repo listing", error);
-  }
-
-  return getRecentOAuthRepos(token, weekAgoISO);
-}
-
-async function getCommits(
+async function searchUserCommits(
   token: string,
-  repoFullName: string,
   username: string,
   weekAgoISO: string,
 ) {
-  const commits: GitHubCommit[] = [];
-  const author = encodeURIComponent(username);
+  const items: GitHubCommitSearchItem[] = [];
+  const q = encodeURIComponent(
+    `author:${username} author-date:>=${weekAgoISO}`,
+  );
 
-  for (let page = 1; page <= 3; page++) {
-    const batch = await githubGet<GitHubCommit[]>(
-      `/repos/${repoFullName}/commits?author=${author}&since=${weekAgoISO}&per_page=100&page=${page}`,
+  for (let page = 1; page <= COMMIT_SEARCH_MAX_PAGES; page++) {
+    const result = await githubGet<GitHubCommitSearchResult>(
+      `/search/commits?q=${q}&per_page=100&page=${page}`,
       token,
     );
 
-    if (!batch?.length) break;
+    const batch = result?.items ?? [];
+    if (!batch.length) break;
 
-    commits.push(...batch);
+    items.push(...batch);
     if (batch.length < 100) break;
   }
 
-  return commits;
+  return items;
 }
 
 async function getCommitStats(
@@ -242,28 +175,20 @@ export async function refreshUserStats(
 
   const byDay: StatsPayload["byDay"] = {};
   const commitsByDay: Record<string, number> = {};
-  const recentRepos = await getRecentRepos(token, weekAgoISO);
+  const commits = await searchUserCommits(token, username, weekAgoISO);
 
-  for (const repo of recentRepos) {
-    const commits = await getCommits(
-      token,
-      repo.full_name,
-      username,
-      weekAgoISO,
-    );
+  await mapWithConcurrency(commits, COMMIT_STATS_CONCURRENCY, async (commit) => {
+    const authorDate = commit.commit.author?.date;
+    if (!authorDate) return;
 
-    await mapWithConcurrency(commits, COMMIT_STATS_CONCURRENCY, async (commit) => {
-      const authorDate = commit.commit.author?.date;
-      if (!authorDate) return;
+    const date = statsDate(new Date(authorDate));
+    const repoFullName = commit.repository.full_name;
 
-      const date = statsDate(new Date(authorDate));
-
-      commitsByDay[date] = (commitsByDay[date] ?? 0) + 1;
-      byDay[date] ??= {};
-      const stats = await getCommitStats(token, repo.full_name, commit.sha);
-      addRepoStats(byDay[date], repo.full_name, stats, repo.private);
-    });
-  }
+    commitsByDay[date] = (commitsByDay[date] ?? 0) + 1;
+    byDay[date] ??= {};
+    const stats = await getCommitStats(token, repoFullName, commit.sha);
+    addRepoStats(byDay[date], repoFullName, stats, commit.repository.private);
+  });
 
   const weekByRepo: RepoStats = {};
   for (const repos of Object.values(byDay)) {
