@@ -291,7 +291,7 @@ button {
 }
 
 .oauth-state-banner {
-  margin-bottom: 28px;
+  margin: 56px 0 0;
 }
 
 .manual-refresh {
