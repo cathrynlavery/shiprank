@@ -1,4 +1,33 @@
+import { signInWithGithubFull } from "@/app/actions";
+
 type OAuthState = "not-opted-in" | "opted-in" | "revoked";
+
+function FullVisibilityForm({
+  children,
+  enabled,
+  username,
+}: {
+  children: string;
+  enabled: boolean;
+  username: string;
+}) {
+  if (!enabled) {
+    return (
+      <button className="button cta-button" type="button" disabled>
+        {children}
+      </button>
+    );
+  }
+
+  return (
+    <form action={signInWithGithubFull}>
+      <input name="redirectTo" type="hidden" value={`/${username}`} />
+      <button className="button cta-button" type="submit">
+        {children}
+      </button>
+    </form>
+  );
+}
 
 export function OAuthStateBanner({
   enabled,
@@ -13,8 +42,6 @@ export function OAuthStateBanner({
   settingsUrl: string;
   username: string;
 }) {
-  const signInHref = `/api/auth/signin/github-full?callbackUrl=${encodeURIComponent(`/${username}`)}`;
-
   if (state === "opted-in") {
     return (
       <section className="permission-notice oauth-state-banner">
@@ -25,9 +52,9 @@ export function OAuthStateBanner({
         </p>
         <div className="permission-notice-action">
           {enabled ? (
-            <a className="button cta-button" href={signInHref}>
+            <FullVisibilityForm enabled={enabled} username={username}>
               reconnect
-            </a>
+            </FullVisibilityForm>
           ) : null}
           <a className="button button-secondary" href={settingsUrl}>
             revoke in github
@@ -51,15 +78,9 @@ export function OAuthStateBanner({
         <h2>full visibility disconnected</h2>
         <p>Full visibility was disconnected on {date}. Reconnect?</p>
         <div className="permission-notice-action">
-          {enabled ? (
-            <a className="button cta-button" href={signInHref}>
-              reconnect
-            </a>
-          ) : (
-            <button className="button cta-button" type="button" disabled>
-              reconnect
-            </button>
-          )}
+          <FullVisibilityForm enabled={enabled} username={username}>
+            reconnect
+          </FullVisibilityForm>
         </div>
       </section>
     );
@@ -76,15 +97,9 @@ export function OAuthStateBanner({
         names, commit messages, or code.
       </p>
       <div className="permission-notice-action">
-        {enabled ? (
-          <a className="button cta-button" href={signInHref}>
-            grant full visibility
-          </a>
-        ) : (
-          <button className="button cta-button" type="button" disabled>
-            grant full visibility
-          </button>
-        )}
+        <FullVisibilityForm enabled={enabled} username={username}>
+          grant full visibility
+        </FullVisibilityForm>
       </div>
     </section>
   );

@@ -290,6 +290,10 @@ button {
   margin-top: 12px;
 }
 
+.permission-notice-action form {
+  margin: 0;
+}
+
 .oauth-state-banner {
   margin: 56px 0 0;
 }
