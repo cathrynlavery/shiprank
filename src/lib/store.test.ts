@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeStats } from "@/lib/store";
+import { mergeByDayStats, normalizeStats } from "@/lib/store";
 import type { StatsPayload } from "@/lib/types";
 
 function makePeriod(overrides: Partial<StatsPayload["today"]> = {}) {
@@ -244,5 +244,42 @@ describe("normalizeStats", () => {
     const stats = normalizeAt({ today: { date: "0001-01-01" } });
     // Should not throw; produce some valid date string.
     expect(stats.yesterday.date).toMatch(/^-?\d{4,6}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("mergeByDayStats", () => {
+  it("merges new days and preserves old days inside the 30-day window", () => {
+    const merged = mergeByDayStats({
+      today: "2026-05-18",
+      existing: {
+        "2026-05-10": { "ada/old": { additions: 10, deletions: 1 } },
+        "2026-05-17": { "ada/stale": { additions: 20, deletions: 2 } },
+      },
+      fresh: {
+        "2026-05-17": { "ada/fresh": { additions: 30, deletions: 3 } },
+        "2026-05-18": { "ada/new": { additions: 40, deletions: 4 } },
+      },
+    });
+
+    expect(merged).toEqual({
+      "2026-05-10": { "ada/old": { additions: 10, deletions: 1 } },
+      "2026-05-17": { "ada/fresh": { additions: 30, deletions: 3 } },
+      "2026-05-18": { "ada/new": { additions: 40, deletions: 4 } },
+    });
+  });
+
+  it("rolls off days older than 30 days", () => {
+    const merged = mergeByDayStats({
+      today: "2026-05-18",
+      existing: {
+        "2026-04-18": { "ada/too-old": { additions: 10, deletions: 1 } },
+        "2026-04-19": { "ada/kept": { additions: 20, deletions: 2 } },
+      },
+      fresh: {},
+    });
+
+    expect(merged).toEqual({
+      "2026-04-19": { "ada/kept": { additions: 20, deletions: 2 } },
+    });
   });
 });

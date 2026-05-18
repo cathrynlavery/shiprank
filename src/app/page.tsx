@@ -132,7 +132,10 @@ export default async function Home({ searchParams }: HomeProps) {
     ? await getUser(session.githubUsername)
     : null;
   const showPermissionNotice =
-    Boolean(session?.githubUsername) && currentUser?.tokenKind !== "github-app";
+    Boolean(session?.githubUsername) &&
+    Boolean(currentUser?.token) &&
+    currentUser?.tokenKind !== "github-app" &&
+    !currentUser?.oauth?.accessToken;
   const isRegisteredUser = Boolean(session?.githubUsername && currentUser);
 
   const noun = sortBy === "prs" ? "prs merged" : "lines shipped";

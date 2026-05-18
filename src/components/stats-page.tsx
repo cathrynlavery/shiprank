@@ -1,16 +1,16 @@
 import Link from "next/link";
-import { GitHubPermissionNotice } from "@/components/github-permission-notice";
 import { ShareButton } from "@/components/share-button";
 import { StatsTabs } from "@/components/stats-tabs";
 import { UpdateTimestamp } from "@/components/update-timestamp";
 import type { StatsPayload } from "@/lib/types";
+import type { ReactNode } from "react";
 
 export function StatsPage({
   stats,
-  showPermissionNotice = false,
+  ownerControls,
 }: {
   stats: StatsPayload;
-  showPermissionNotice?: boolean;
+  ownerControls?: ReactNode;
 }) {
   return (
     <main className="wrap">
@@ -38,7 +38,7 @@ export function StatsPage({
         </a>
       </div>
       <UpdateTimestamp generated={stats.generated} />
-      {showPermissionNotice ? <GitHubPermissionNotice /> : null}
+      {ownerControls}
       <StatsTabs stats={stats} />
     </main>
   );

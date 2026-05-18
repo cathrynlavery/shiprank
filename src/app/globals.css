@@ -284,7 +284,27 @@ button {
 }
 
 .permission-notice-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 12px;
+}
+
+.oauth-state-banner {
+  margin-bottom: 28px;
+}
+
+.manual-refresh {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 18px 0 32px;
+}
+
+.manual-refresh-error {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .connect-title {
@@ -796,6 +816,16 @@ button {
 .button:hover {
   background: var(--foreground);
   color: var(--background);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.button:disabled:hover {
+  background: var(--background);
+  color: var(--foreground);
 }
 
 .cta-button {

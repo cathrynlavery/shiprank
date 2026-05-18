@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { refreshUserStats } from "@/lib/github";
-import { getUsableGitHubToken } from "@/lib/github-token";
 import { getUser, saveStats, saveUser } from "@/lib/store";
 
 export const maxDuration = 300;
@@ -15,15 +14,13 @@ export async function POST() {
   }
 
   const user = await getUser(username);
-  if (!user?.token) {
+  if (!user?.token && !user?.oauth?.accessToken) {
     return NextResponse.json({ error: "no token" }, { status: 404 });
   }
 
   try {
-    const { user: updatedUser, token } = await getUsableGitHubToken(user);
+    const { stats, user: updatedUser } = await refreshUserStats(user);
     if (updatedUser !== user) await saveUser(updatedUser);
-
-    const stats = await refreshUserStats(username, token);
     await saveStats(stats);
     return NextResponse.json({ ok: true, generated: stats.generated });
   } catch (error) {
