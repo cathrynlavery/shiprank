@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "setup:local": "node scripts/setup-local-env.mjs",
-    "dev": "next dev --webpack --disable-source-maps --hostname 127.0.0.1",
+    "dev": "node --max-old-space-size=768 ./node_modules/next/dist/bin/next dev --webpack --disable-source-maps --hostname 127.0.0.1",
     "dev:turbo": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
