@@ -5,6 +5,7 @@ import {
   buildWeekCardData,
 } from "@/lib/social/data";
 import {
+  loadSvgFontCss,
   reposCardSvg,
   todayCardSvg,
   weekCardSvg,
@@ -33,12 +34,13 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return new Response("Stats not found.", { status: 404 });
   }
 
+  const fontCss = await loadSvgFontCss();
   const body =
     cardType === "today"
-      ? todayCardSvg(buildTodayCardData(stats))
+      ? todayCardSvg(buildTodayCardData(stats), fontCss)
       : cardType === "week"
-        ? weekCardSvg(buildWeekCardData(stats))
-        : reposCardSvg(buildReposCardData(stats));
+        ? weekCardSvg(buildWeekCardData(stats), fontCss)
+        : reposCardSvg(buildReposCardData(stats), fontCss);
 
   return new Response(body, {
     headers: {
