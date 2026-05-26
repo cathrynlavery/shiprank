@@ -85,7 +85,7 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
 
   const openSharePanel = useCallback(() => {
     setActiveType("today");
-    setStatus((currentStatus) => currentStatus ?? "generating preview");
+    setStatus((currentStatus) => currentStatus ?? "generating previews");
     setOpen(true);
   }, []);
 
@@ -169,19 +169,20 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
   );
 
   const markPreviewLoaded = useCallback((type: SocialCardType) => {
-    setLoadedPreviews((current) => new Set(current).add(type));
-    setStatus((currentStatus) =>
-      currentStatus === "generating preview" ? null : currentStatus,
-    );
+    setLoadedPreviews((current) => {
+      const next = new Set(current).add(type);
+      if (SOCIAL_CARDS.every((card) => next.has(card.type))) {
+        setStatus((currentStatus) =>
+          currentStatus === "generating previews" ? null : currentStatus,
+        );
+      }
+      return next;
+    });
   }, []);
 
-  const selectCard = useCallback(
-    (type: SocialCardType) => {
-      setActiveType(type);
-      if (!loadedPreviews.has(type)) setStatus("generating preview");
-    },
-    [loadedPreviews],
-  );
+  const selectCard = useCallback((type: SocialCardType) => {
+    setActiveType(type);
+  }, []);
 
   const activeMeta =
     SOCIAL_CARDS.find((card) => card.type === activeType) ?? SOCIAL_CARDS[0];
@@ -228,7 +229,7 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
               {SOCIAL_CARDS.map((card) => {
                 const selected = card.type === activeType;
                 const hasLoaded = loadedPreviews.has(card.type);
-                const shouldRenderPreview = open && (selected || hasLoaded);
+                const shouldRenderPreview = open;
                 const loading = shouldRenderPreview && !hasLoaded;
                 return (
                   <button
