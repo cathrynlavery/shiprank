@@ -46,6 +46,11 @@ npm run setup:local
 npm run dev
 ```
 
+The default local server uses Next's webpack dev bundler on `127.0.0.1`.
+Turbopack can use substantially more memory in this app when the browser
+reconnects and preloads profile/share-image routes. If you specifically need to
+debug Turbopack behavior, run `npm run dev:turbo`.
+
 For local testing, create a GitHub App and set these URLs:
 
 ```
