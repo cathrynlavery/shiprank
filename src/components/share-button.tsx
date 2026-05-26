@@ -19,15 +19,10 @@ function buildShareText(total: number) {
 export function ShareButton({ username, total, date }: ShareButtonProps) {
   const [open, setOpen] = useState(false);
   const [activeType, setActiveType] = useState<SocialCardType>("today");
-  const [cacheBuster, setCacheBuster] = useState(() => Date.now());
   const [status, setStatus] = useState<string | null>(null);
-  const [loadingPreviews, setLoadingPreviews] = useState<
-    Record<SocialCardType, boolean>
-  >(() => ({
-    today: true,
-    week: true,
-    repos: true,
-  }));
+  const [loadedPreviews, setLoadedPreviews] = useState<Set<SocialCardType>>(
+    () => new Set(),
+  );
   const [generating, setGenerating] = useState<{
     type: SocialCardType;
     action: "copy" | "download";
@@ -51,18 +46,13 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
 
   const buildSrc = useCallback(
     (type: SocialCardType) =>
-      `/api/users/${encodeURIComponent(username)}/social/${type}?v=${cacheBuster}`,
-    [cacheBuster, username],
+      `/api/users/${encodeURIComponent(username)}/social/${type}`,
+    [username],
   );
 
   const openSharePanel = useCallback(() => {
-    setLoadingPreviews({
-      today: true,
-      week: true,
-      repos: true,
-    });
-    setStatus("generating previews");
-    setCacheBuster(Date.now());
+    setActiveType("today");
+    setStatus((currentStatus) => currentStatus ?? "generating preview");
     setOpen(true);
   }, []);
 
@@ -146,13 +136,19 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
   );
 
   const markPreviewLoaded = useCallback((type: SocialCardType) => {
-    setLoadingPreviews((current) => ({ ...current, [type]: false }));
-    setStatus((currentStatus) => {
-      if (currentStatus !== "generating previews") return currentStatus;
-      const next = { ...loadingPreviews, [type]: false };
-      return Object.values(next).some(Boolean) ? currentStatus : null;
-    });
-  }, [loadingPreviews]);
+    setLoadedPreviews((current) => new Set(current).add(type));
+    setStatus((currentStatus) =>
+      currentStatus === "generating preview" ? null : currentStatus,
+    );
+  }, []);
+
+  const selectCard = useCallback(
+    (type: SocialCardType) => {
+      setActiveType(type);
+      if (!loadedPreviews.has(type)) setStatus("generating preview");
+    },
+    [loadedPreviews],
+  );
 
   const activeMeta =
     SOCIAL_CARDS.find((card) => card.type === activeType) ?? SOCIAL_CARDS[0];
@@ -198,7 +194,9 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
             <div className="share-card-grid">
               {SOCIAL_CARDS.map((card) => {
                 const selected = card.type === activeType;
-                const loading = loadingPreviews[card.type];
+                const hasLoaded = loadedPreviews.has(card.type);
+                const shouldRenderPreview = open && (selected || hasLoaded);
+                const loading = shouldRenderPreview && !hasLoaded;
                 return (
                   <button
                     aria-pressed={selected}
@@ -206,7 +204,7 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
                       selected ? "share-card-option active" : "share-card-option"
                     }
                     key={card.type}
-                    onClick={() => setActiveType(card.type)}
+                    onClick={() => selectCard(card.type)}
                     type="button"
                   >
                     <div className="share-card-preview">
@@ -215,14 +213,20 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
                           <span />
                         </div>
                       ) : null}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        className={loading ? "is-loading" : ""}
-                        src={buildSrc(card.type)}
-                        alt={card.title}
-                        onLoad={() => markPreviewLoaded(card.type)}
-                        onError={() => markPreviewLoaded(card.type)}
-                      />
+                      {shouldRenderPreview ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          className={loading ? "is-loading" : ""}
+                          src={buildSrc(card.type)}
+                          alt={card.title}
+                          onLoad={() => markPreviewLoaded(card.type)}
+                          onError={() => markPreviewLoaded(card.type)}
+                        />
+                      ) : (
+                        <div className="share-card-placeholder" aria-hidden="true">
+                          {card.title}
+                        </div>
+                      )}
                     </div>
                     <span>{card.title}</span>
                   </button>

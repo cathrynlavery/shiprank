@@ -17,6 +17,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const size = { width: 1080, height: 1080 };
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const imageCache = new Map<string, { body: ArrayBuffer; expiresAt: number }>();
 
 type RouteParams = {
   params: Promise<{
@@ -37,6 +39,17 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return new Response("Stats not found.", { status: 404 });
   }
 
+  const cacheKey = `${username}:${cardType}:${stats.generated}`;
+  const cached = imageCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return new Response(cached.body, {
+      headers: {
+        "cache-control": "public, s-maxage=300, stale-while-revalidate=86400",
+        "content-type": "image/png",
+      },
+    });
+  }
+
   const fonts = await loadSocialFonts();
   const element =
     cardType === "today" ? (
@@ -47,7 +60,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       <ReposCard {...buildReposCardData(stats)} />
     );
 
-  return new ImageResponse(element, {
+  const response = new ImageResponse(element, {
     ...size,
     fonts: [
       { name: "Geist", data: fonts.sans, weight: 400, style: "normal" },
@@ -57,5 +70,13 @@ export async function GET(_request: Request, { params }: RouteParams) {
     headers: {
       "cache-control": "public, s-maxage=300, stale-while-revalidate=86400",
     },
+  });
+  const body = await response.arrayBuffer();
+  imageCache.set(cacheKey, { body, expiresAt: Date.now() + CACHE_TTL_MS });
+
+  return new Response(body, {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
   });
 }
