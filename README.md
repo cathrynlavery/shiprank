@@ -41,17 +41,41 @@ Visual style is Visualize Value: black, white, monospace, thin 1px rules, single
 git clone https://github.com/cathrynlavery/shiprank.git
 cd shiprank
 npm install
-cp .env.example .env.local
-# fill in the values (see below)
+npm run setup:local
+# fill in AUTH_GITHUB_ID and AUTH_GITHUB_SECRET in .env.local
 npm run dev
 ```
 
-GitHub OAuth callback URLs (set both on your GitHub OAuth app):
+For local testing, create a GitHub App and set these URLs:
+
+```
+Homepage URL: http://localhost:3000
+Callback URL: http://localhost:3000/api/auth/callback/github
+Setup URL: http://localhost:3000/api/github/setup
+```
+
+Enable "Redirect on update" for the setup URL if you want repository selection
+changes to return to ShipRank. The setup URL is where GitHub returns after App
+installation; the callback URL is where GitHub returns after user authorization.
+
+Then copy these from the GitHub App settings into `.env.local`:
+
+```
+AUTH_GITHUB_ID=<Client ID>
+AUTH_GITHUB_SECRET=<Client secret>
+GITHUB_APP_SLUG=<app slug>
+```
+
+GitHub OAuth callback URLs for deployments:
 
 ```
 http://localhost:3000/api/auth/callback/github
 https://your-deployment.vercel.app/api/auth/callback/github
 ```
+
+Vercel KV is optional in development. If `KV_REST_API_URL` and
+`KV_REST_API_TOKEN` are empty, `npm run dev` stores users, tokens, and stats in
+`.local-data/shiprank-store.json`. Delete that file to reset local state.
 
 ## Env
 
@@ -62,8 +86,8 @@ https://your-deployment.vercel.app/api/auth/callback/github
 | `AUTH_GITHUB_SECRET` | GitHub App client secret                            |
 | `GITHUB_APP_SLUG`    | GitHub App slug for repository installation links   |
 | `AUTH_URL`           | Deployed URL (or `http://localhost:3000` in dev)    |
-| `KV_REST_API_URL`    | Vercel KV / Upstash Redis REST URL                  |
-| `KV_REST_API_TOKEN`  | KV access token                                     |
+| `KV_REST_API_URL`    | Optional in dev; Vercel KV / Upstash Redis REST URL |
+| `KV_REST_API_TOKEN`  | Optional in dev; KV access token                    |
 | `CRON_SECRET`        | Random string used to authorize `/api/cron/refresh` |
 
 ## Manual refresh

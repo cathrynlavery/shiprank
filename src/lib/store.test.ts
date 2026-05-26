@@ -1,5 +1,19 @@
-import { describe, expect, it } from "vitest";
-import { mergeByDayStats, normalizeStats } from "@/lib/store";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getAllStats,
+  getAllUsers,
+  getStats,
+  getUser,
+  isLocalStoreEnabled,
+  mergeByDayStats,
+  normalizeStats,
+  saveStats,
+  saveUser,
+} from "@/lib/store";
+import { statsDate } from "@/lib/stats-date";
 import type { StatsPayload } from "@/lib/types";
 
 function makePeriod(overrides: Partial<StatsPayload["today"]> = {}) {
@@ -281,5 +295,68 @@ describe("mergeByDayStats", () => {
     expect(merged).toEqual({
       "2026-04-19": { "ada/kept": { additions: 20, deletions: 2 } },
     });
+  });
+});
+
+describe("development local store", () => {
+  let dir: string;
+  let storePath: string;
+  let cwd: string;
+
+  beforeEach(async () => {
+    cwd = process.cwd();
+    dir = await mkdtemp(join(tmpdir(), "shiprank-store-"));
+    process.chdir(dir);
+    storePath = join(dir, ".local-data", "shiprank-store.json");
+    vi.stubEnv("SHIPRANK_USE_LOCAL_STORE", "1");
+    vi.stubEnv("TOKEN_ENCRYPTION_KEY", "12345678901234567890123456789012");
+    vi.stubEnv("KV_REST_API_URL", "");
+    vi.stubEnv("KV_REST_API_TOKEN", "");
+  });
+
+  afterEach(async () => {
+    process.chdir(cwd);
+    vi.unstubAllEnvs();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("persists users and stats without Vercel KV", async () => {
+    expect(isLocalStoreEnabled()).toBe(true);
+
+    await saveUser({
+      username: "ada",
+      githubUserId: 123,
+      registeredAt: "2026-05-18T00:00:00.000Z",
+      token: "github-token",
+    });
+    expect(JSON.parse(await readFile(storePath, "utf8")).values["user:ada"])
+      .toBeTruthy();
+
+    await saveStats({
+      username: "ada",
+      generated: "2026-05-18T12:00:00.000Z",
+      today: makePeriod({ date: statsDate(), lines: 10 }),
+      yesterday: makePeriod({ lines: 5 }),
+      week: makePeriod({ lines: 15 }),
+      byDay: {},
+    });
+    const afterStats = JSON.parse(await readFile(storePath, "utf8"));
+    expect(Object.keys(afterStats.values)).toContain("user:ada");
+    expect(isLocalStoreEnabled()).toBe(true);
+
+    await expect(getUser("ada")).resolves.toMatchObject({
+      username: "ada",
+      token: "github-token",
+    });
+    await expect(getStats("ada")).resolves.toMatchObject({
+      username: "ada",
+      today: { lines: 10 },
+    });
+    await expect(getAllUsers()).resolves.toHaveLength(1);
+    await expect(getAllStats()).resolves.toHaveLength(1);
+
+    const stored = JSON.parse(await readFile(storePath, "utf8"));
+    expect(stored.values["user:ada"].token).not.toBe("github-token");
+    expect(stored.values["stats:ada"].today.lines).toBe(10);
   });
 });
