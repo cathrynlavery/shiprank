@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { SOCIAL_CARDS, type SocialCardType } from "@/lib/social/types";
 
 type ShareButtonProps = {
   username: string;
@@ -16,7 +17,56 @@ function buildShareText(total: number) {
 }
 
 export function ShareButton({ username, total, date }: ShareButtonProps) {
-  const onClick = useCallback(async () => {
+  const [open, setOpen] = useState(false);
+  const [activeType, setActiveType] = useState<SocialCardType>("today");
+  const [cacheBuster, setCacheBuster] = useState(() => Date.now());
+  const [status, setStatus] = useState<string | null>(null);
+  const [loadingPreviews, setLoadingPreviews] = useState<
+    Record<SocialCardType, boolean>
+  >(() => ({
+    today: true,
+    week: true,
+    repos: true,
+  }));
+  const [generating, setGenerating] = useState<{
+    type: SocialCardType;
+    action: "copy" | "download";
+  } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  const showStatus = useCallback((message: string) => {
+    setStatus(message);
+    window.setTimeout(() => setStatus(null), 3600);
+  }, []);
+
+  const buildSrc = useCallback(
+    (type: SocialCardType) =>
+      `/api/users/${encodeURIComponent(username)}/social/${type}?v=${cacheBuster}`,
+    [cacheBuster, username],
+  );
+
+  const openSharePanel = useCallback(() => {
+    setLoadingPreviews({
+      today: true,
+      week: true,
+      repos: true,
+    });
+    setStatus("generating previews");
+    setCacheBuster(Date.now());
+    setOpen(true);
+  }, []);
+
+  const shareText = useCallback(async () => {
     const text = buildShareText(total);
     const url = `https://shiprank.dev/${username}`;
 
@@ -35,9 +85,181 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
     window.open(intent.toString(), "_blank", "noopener,noreferrer");
   }, [username, total, date]);
 
+  const fetchCard = useCallback(
+    async (type: SocialCardType) => {
+      const response = await fetch(buildSrc(type));
+      if (!response.ok) {
+        throw new Error(`Could not generate ${type} card.`);
+      }
+      return response.blob();
+    },
+    [buildSrc],
+  );
+
+  const downloadCard = useCallback(
+    async (type: SocialCardType) => {
+      try {
+        setGenerating({ type, action: "download" });
+        setStatus("generating image");
+        const blob = await fetchCard(type);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `shiprank-${username}-${type}.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showStatus("downloaded");
+      } catch (error) {
+        showStatus(error instanceof Error ? error.message : "download failed");
+      } finally {
+        setGenerating(null);
+      }
+    },
+    [fetchCard, showStatus, username],
+  );
+
+  const copyCard = useCallback(
+    async (type: SocialCardType) => {
+      try {
+        setGenerating({ type, action: "copy" });
+        setStatus("generating image");
+        const blob = await fetchCard(type);
+        if (
+          typeof ClipboardItem === "undefined" ||
+          !navigator.clipboard?.write
+        ) {
+          throw new Error("image copy is not supported here");
+        }
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": blob }),
+        ]);
+        showStatus("copied");
+      } catch (error) {
+        showStatus(error instanceof Error ? error.message : "copy failed");
+      } finally {
+        setGenerating(null);
+      }
+    },
+    [fetchCard, showStatus],
+  );
+
+  const markPreviewLoaded = useCallback((type: SocialCardType) => {
+    setLoadingPreviews((current) => ({ ...current, [type]: false }));
+    setStatus((currentStatus) => {
+      if (currentStatus !== "generating previews") return currentStatus;
+      const next = { ...loadingPreviews, [type]: false };
+      return Object.values(next).some(Boolean) ? currentStatus : null;
+    });
+  }, [loadingPreviews]);
+
+  const activeMeta =
+    SOCIAL_CARDS.find((card) => card.type === activeType) ?? SOCIAL_CARDS[0];
+
   return (
-    <button className="button" type="button" onClick={onClick}>
-      share
-    </button>
+    <>
+      <button className="button" type="button" onClick={openSharePanel}>
+        share
+      </button>
+
+      {open ? (
+        <div className="share-layer" role="presentation">
+          <button
+            aria-label="close share panel"
+            className="share-backdrop"
+            onClick={() => setOpen(false)}
+            type="button"
+          />
+          <div
+            aria-modal="true"
+            className="share-panel"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="share-panel-head">
+              <div>
+                <div className="profile-kicker">share image</div>
+                <h2>{activeMeta.title}</h2>
+              </div>
+              <button
+                aria-label="close"
+                className="icon-button share-close"
+                onClick={() => setOpen(false)}
+                type="button"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="share-card-grid">
+              {SOCIAL_CARDS.map((card) => {
+                const selected = card.type === activeType;
+                const loading = loadingPreviews[card.type];
+                return (
+                  <button
+                    aria-pressed={selected}
+                    className={
+                      selected ? "share-card-option active" : "share-card-option"
+                    }
+                    key={card.type}
+                    onClick={() => setActiveType(card.type)}
+                    type="button"
+                  >
+                    <div className="share-card-preview">
+                      {loading ? (
+                        <div className="share-card-loading" aria-hidden="true">
+                          <span />
+                        </div>
+                      ) : null}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        className={loading ? "is-loading" : ""}
+                        src={buildSrc(card.type)}
+                        alt={card.title}
+                        onLoad={() => markPreviewLoaded(card.type)}
+                        onError={() => markPreviewLoaded(card.type)}
+                      />
+                    </div>
+                    <span>{card.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="share-actions">
+              <button
+                className="button cta-button"
+                disabled={Boolean(generating)}
+                onClick={() => downloadCard(activeType)}
+                type="button"
+              >
+                {generating?.action === "download" ? "generating" : "download"}
+              </button>
+              <button
+                className="button"
+                disabled={Boolean(generating)}
+                onClick={() => copyCard(activeType)}
+                type="button"
+              >
+                {generating?.action === "copy" ? "generating" : "copy image"}
+              </button>
+              <button
+                className="button button-secondary"
+                disabled={Boolean(generating)}
+                onClick={shareText}
+                type="button"
+              >
+                post link
+              </button>
+              {status ? <span className="share-status">{status}</span> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
