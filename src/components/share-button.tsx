@@ -16,6 +16,39 @@ function buildShareText(total: number) {
   return `tracking lines shipped on ShipRank`;
 }
 
+async function svgToPngBlob(svg: string) {
+  const svgUrl = URL.createObjectURL(
+    new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
+  );
+
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    const loaded = new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("could not render image"));
+    });
+    image.src = svgUrl;
+    await loaded;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 1080;
+    canvas.height = 1080;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("image export is not supported here");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("could not export image"));
+      }, "image/png");
+    });
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+}
+
 export function ShareButton({ username, total, date }: ShareButtonProps) {
   const [open, setOpen] = useState(false);
   const [activeType, setActiveType] = useState<SocialCardType>("today");
@@ -75,13 +108,13 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
     window.open(intent.toString(), "_blank", "noopener,noreferrer");
   }, [username, total, date]);
 
-  const fetchCard = useCallback(
+  const fetchCardPng = useCallback(
     async (type: SocialCardType) => {
       const response = await fetch(buildSrc(type));
       if (!response.ok) {
         throw new Error(`Could not generate ${type} card.`);
       }
-      return response.blob();
+      return svgToPngBlob(await response.text());
     },
     [buildSrc],
   );
@@ -91,7 +124,7 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
       try {
         setGenerating({ type, action: "download" });
         setStatus("generating image");
-        const blob = await fetchCard(type);
+        const blob = await fetchCardPng(type);
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -107,7 +140,7 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
         setGenerating(null);
       }
     },
-    [fetchCard, showStatus, username],
+    [fetchCardPng, showStatus, username],
   );
 
   const copyCard = useCallback(
@@ -115,7 +148,7 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
       try {
         setGenerating({ type, action: "copy" });
         setStatus("generating image");
-        const blob = await fetchCard(type);
+        const blob = await fetchCardPng(type);
         if (
           typeof ClipboardItem === "undefined" ||
           !navigator.clipboard?.write
@@ -132,7 +165,7 @@ export function ShareButton({ username, total, date }: ShareButtonProps) {
         setGenerating(null);
       }
     },
-    [fetchCard, showStatus],
+    [fetchCardPng, showStatus],
   );
 
   const markPreviewLoaded = useCallback((type: SocialCardType) => {
