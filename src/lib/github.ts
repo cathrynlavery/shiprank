@@ -6,13 +6,20 @@ import type {
   StoredUser,
 } from "@/lib/types";
 import { mapWithConcurrency } from "@/lib/concurrency";
-import { addStatsDays, statsDate } from "@/lib/stats-date";
+import {
+  addStatsDays,
+  SHIPRANK_START_DATE,
+  statsDate,
+  statsDaysBetween,
+} from "@/lib/stats-date";
 import {
   getCachedCommitStats,
+  getCachedPrCount,
   getStats,
   mergeByDayCommits,
   mergeByDayStats,
   saveCachedCommitStats,
+  saveCachedPrCount,
 } from "@/lib/store";
 import {
   classifyGitHubFailure,
@@ -55,6 +62,8 @@ const COMMIT_STATS_CONCURRENCY = 8;
 const COMMIT_SEARCH_MAX_PAGES = 10;
 const INCREMENTAL_SEARCH_DAYS = 3;
 const FULL_SEARCH_DAYS = 7;
+const LIVE_PR_COUNT_TTL_SECONDS = 60 * 60 * 3;
+const RECENT_PR_COUNT_TTL_SECONDS = 60 * 60 * 24;
 
 async function githubGet<T>(path: string, token: string): Promise<T | null> {
   const response = await fetch(`${GITHUB_API}${path}`, {
@@ -105,6 +114,10 @@ async function searchUserCommits(
     if (batch.length < 100) break;
   }
 
+  console.log(
+    `[shiprank] commit search for ${username} since ${weekAgoISO}: ${items.length} commits found`,
+  );
+
   return items;
 }
 
@@ -145,15 +158,32 @@ async function getCommitStats(
 
 async function getMergedPrCount(
   token: string,
+  source: TokenSource,
   username: string,
   query: string,
+  cacheTtlSeconds: number,
 ) {
+  try {
+    const cached = await getCachedPrCount(username, source, query);
+    if (cached !== null) return cached;
+  } catch (error) {
+    console.warn("PR count cache read failed", error);
+  }
+
   const q = encodeURIComponent(`author:${username} type:pr is:merged ${query}`);
   const result = await githubGet<GitHubSearchResult>(
     `/search/issues?q=${q}&per_page=1`,
     token,
   );
-  return result?.total_count ?? 0;
+  const count = result?.total_count ?? 0;
+
+  try {
+    await saveCachedPrCount(username, source, query, count, cacheTtlSeconds);
+  } catch (error) {
+    console.warn("PR count cache write failed", error);
+  }
+
+  return count;
 }
 
 function sumLines(repos: RepoStats) {
@@ -183,7 +213,10 @@ function addRepoStats(
   bucket[repoFullName].private = isPrivate;
 }
 
-function sumCommitCounts(byDayCommits: Record<string, number>, startDate: string) {
+function sumCommitCounts(
+  byDayCommits: Record<string, number>,
+  startDate: string,
+) {
   return Object.entries(byDayCommits).reduce(
     (sum, [date, count]) => (date >= startDate ? sum + count : sum),
     0,
@@ -210,18 +243,22 @@ async function collectByDayStats(
   const commitsByDay: Record<string, number> = {};
   const commits = await searchUserCommits(token, username, sinceISO);
 
-  await mapWithConcurrency(commits, COMMIT_STATS_CONCURRENCY, async (commit) => {
-    const authorDate = commit.commit.author?.date;
-    if (!authorDate) return;
+  await mapWithConcurrency(
+    commits,
+    COMMIT_STATS_CONCURRENCY,
+    async (commit) => {
+      const authorDate = commit.commit.author?.date;
+      if (!authorDate) return;
 
-    const date = statsDate(new Date(authorDate));
-    const repoFullName = commit.repository.full_name;
+      const date = statsDate(new Date(authorDate));
+      const repoFullName = commit.repository.full_name;
 
-    commitsByDay[date] = (commitsByDay[date] ?? 0) + 1;
-    byDay[date] ??= {};
-    const stats = await getCommitStats(token, repoFullName, commit.sha);
-    addRepoStats(byDay[date], repoFullName, stats, commit.repository.private);
-  });
+      commitsByDay[date] = (commitsByDay[date] ?? 0) + 1;
+      byDay[date] ??= {};
+      const stats = await getCommitStats(token, repoFullName, commit.sha);
+      addRepoStats(byDay[date], repoFullName, stats, commit.repository.private);
+    },
+  );
 
   return { byDay, commitsByDay };
 }
@@ -251,7 +288,8 @@ async function runWithSearchToken(
   commitsByDay: Record<string, number>;
 }> {
   const initial = await getSearchToken(user);
-  if (!initial.token) throw new Error(`no usable GitHub token for ${user.username}`);
+  if (!initial.token)
+    throw new Error(`no usable GitHub token for ${user.username}`);
 
   try {
     const collected = await collectByDayStats(
@@ -286,7 +324,11 @@ async function runWithSearchToken(
     const app = await getUsableGitHubToken(userAfterOauthFailure);
     if (!app.token) throw error;
 
-    const collected = await collectByDayStats(user.username, app.token, sinceISO);
+    const collected = await collectByDayStats(
+      user.username,
+      app.token,
+      sinceISO,
+    );
     return {
       user: app.user,
       token: app.token,
@@ -306,12 +348,19 @@ export async function refreshUserStats(user: StoredUser): Promise<{
 
   const existingStats = await getStats(user.username);
   const fullRefresh = Boolean(user.byDayInvalidUntil || !existingStats);
-  const searchDays = fullRefresh ? FULL_SEARCH_DAYS : INCREMENTAL_SEARCH_DAYS;
-  const searchStartDate = addStatsDays(today, -(searchDays - 1));
+  const searchStartDate = fullRefresh
+    ? SHIPRANK_START_DATE
+    : addStatsDays(today, -(INCREMENTAL_SEARCH_DAYS - 1));
+  const searchDays = statsDaysBetween(searchStartDate, today) + 1;
   const weekStartDate = addStatsDays(today, -(FULL_SEARCH_DAYS - 1));
   const sinceISO = `${searchStartDate}T00:00:00Z`;
 
   const collected = await runWithSearchToken(user, sinceISO);
+
+  console.log(
+    `[shiprank] refresh ${user.username}: source=${collected.source} fullRefresh=${fullRefresh} days=${searchDays} byDay=${Object.keys(collected.byDay).length} dates`,
+  );
+
   const sourceChanged = collected.source !== user.byDayTokenSource;
   const replaceCachedDays = fullRefresh && sourceChanged;
   const freshByDay = replaceCachedDays
@@ -331,10 +380,37 @@ export async function refreshUserStats(user: StoredUser): Promise<{
 
   const weekByRepo = rollupRepos(freshByDay, weekStartDate);
 
-  const [prsToday, prsYesterday, prsWeek] = await Promise.all([
-    getMergedPrCount(collected.token, user.username, `merged:${today}`),
-    getMergedPrCount(collected.token, user.username, `merged:${yesterday}`),
-    getMergedPrCount(collected.token, user.username, `merged:>=${weekStartDate}`),
+  const totalByRepo = rollupRepos(freshByDay, SHIPRANK_START_DATE);
+
+  const [prsToday, prsYesterday, prsWeek, prsTotal] = await Promise.all([
+    getMergedPrCount(
+      collected.token,
+      collected.source,
+      user.username,
+      `merged:${today}`,
+      LIVE_PR_COUNT_TTL_SECONDS,
+    ),
+    getMergedPrCount(
+      collected.token,
+      collected.source,
+      user.username,
+      `merged:${yesterday}`,
+      RECENT_PR_COUNT_TTL_SECONDS,
+    ),
+    getMergedPrCount(
+      collected.token,
+      collected.source,
+      user.username,
+      `merged:>=${weekStartDate}`,
+      LIVE_PR_COUNT_TTL_SECONDS,
+    ),
+    getMergedPrCount(
+      collected.token,
+      collected.source,
+      user.username,
+      `merged:>=${SHIPRANK_START_DATE}`,
+      LIVE_PR_COUNT_TTL_SECONDS,
+    ),
   ]);
 
   const todayByRepo = freshByDay[today] ?? {};
@@ -342,6 +418,7 @@ export async function refreshUserStats(user: StoredUser): Promise<{
   const todayCommits = freshCommitsByDay[today] ?? 0;
   const yesterdayCommits = freshCommitsByDay[yesterday] ?? 0;
   const weekCommits = sumCommitCounts(freshCommitsByDay, weekStartDate);
+  const totalCommits = sumCommitCounts(freshCommitsByDay, SHIPRANK_START_DATE);
 
   const todaySummary: PeriodSummary = {
     lines: sumLines(todayByRepo),
@@ -367,12 +444,21 @@ export async function refreshUserStats(user: StoredUser): Promise<{
     byRepo: weekByRepo,
   };
 
+  const totalSummary: PeriodSummary = {
+    lines: sumLines(totalByRepo),
+    net: sumNet(totalByRepo),
+    commits: totalCommits,
+    prs: prsTotal,
+    byRepo: totalByRepo,
+  };
+
   const stats = {
     username: user.username,
     generated: now.toISOString(),
     today: { date: today, ...todaySummary },
     yesterday: { date: yesterday, ...yesterdaySummary },
     week: weekSummary,
+    total: totalSummary,
     byDay: freshByDay,
     byDayCommits: freshCommitsByDay,
   };

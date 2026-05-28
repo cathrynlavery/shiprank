@@ -10,7 +10,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { UpdateTimestamp } from "@/components/update-timestamp";
 import { shortDate, weekRange } from "@/lib/date-label";
 import { getAllStats, getUser } from "@/lib/store";
-import { statsDate } from "@/lib/stats-date";
+import { SHIPRANK_START_DATE, statsDate } from "@/lib/stats-date";
 import type { PeriodSummary, RepoStats, StatsPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ type HomeProps = {
   }>;
 };
 
-type RangeKey = "today" | "yesterday" | "week";
+type RangeKey = "today" | "yesterday" | "week" | "total";
 
 type RangeDef = {
   label: string;
@@ -50,9 +50,15 @@ const RANGES: Record<RangeKey, RangeDef> = {
     period: (s) => s.week,
     date: (s) => s.today.date,
   },
+  total: {
+    label: "since ShipRank started",
+    toggleLabel: "total",
+    period: (s) => s.total,
+    date: (s) => s.today.date,
+  },
 };
 
-const RANGE_ORDER: RangeKey[] = ["today", "yesterday", "week"];
+const RANGE_ORDER: RangeKey[] = ["today", "yesterday", "week", "total"];
 
 function parseRange(value: string | undefined): RangeKey {
   return (RANGE_ORDER as string[]).includes(value ?? "")
@@ -117,7 +123,11 @@ export default async function Home({ searchParams }: HomeProps) {
   const leader = leaderboard[0];
   const heroDate = leader?.date ?? statsDate();
   const heroDateLabel =
-    mode === "week" ? weekRange(heroDate) : shortDate(heroDate);
+    mode === "week"
+      ? weekRange(heroDate)
+      : mode === "total"
+        ? `since ${shortDate(SHIPRANK_START_DATE)}`
+        : shortDate(heroDate);
   const heroLines = leaderboard.reduce((sum, entry) => sum + entry.lines, 0);
   const heroCommits = leaderboard.reduce(
     (sum, entry) => sum + entry.commits,

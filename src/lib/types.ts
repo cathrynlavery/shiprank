@@ -20,6 +20,7 @@ export type StatsPayload = {
   today: PeriodSummary & { date: string };
   yesterday: PeriodSummary & { date: string };
   week: PeriodSummary;
+  total: PeriodSummary;
   byDay: Record<string, RepoStats>;
   byDayCommits?: Record<string, number>;
 };

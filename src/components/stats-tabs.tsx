@@ -7,9 +7,10 @@ import { MetricStrip } from "@/components/metric-strip";
 import { RepoList } from "@/components/repo-list";
 import { shortDate, weekRange } from "@/lib/date-label";
 import { formatLines, signedLines } from "@/lib/format";
+import { SHIPRANK_START_DATE } from "@/lib/stats-date";
 import type { PeriodSummary, StatsPayload } from "@/lib/types";
 
-type PeriodKey = "today" | "yesterday" | "week";
+type PeriodKey = "today" | "yesterday" | "week" | "total";
 
 type Period = {
   key: PeriodKey;
@@ -59,6 +60,16 @@ export function StatsTabs({ stats }: { stats: StatsPayload }) {
       projectHead: "last 7 days by project",
       showChart: true,
       repoLimit: 8,
+    },
+    {
+      key: "total",
+      label: "TOTAL",
+      dateLabel: `since ${shortDate(SHIPRANK_START_DATE)}`,
+      summary: stats.total,
+      hero: `+${formatLines(stats.total.lines)}`,
+      subhead: "lines since ShipRank started",
+      projectHead: "total by project",
+      repoLimit: 12,
     },
   ];
   const active =
