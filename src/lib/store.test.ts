@@ -25,6 +25,7 @@ describe("normalizeStats", () => {
     expect(stats.today.lines).toBe(0);
     expect(stats.yesterday.lines).toBe(0);
     expect(stats.week.lines).toBe(0);
+    expect(stats.total.lines).toBe(0);
     expect(stats.byDay).toEqual({});
     expect(stats.today.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(stats.yesterday.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -57,6 +58,13 @@ describe("normalizeStats", () => {
         prs: 4,
         byRepo: { "ada/repo": { additions: 500, deletions: 100 } },
       }),
+      total: makePeriod({
+        lines: 650,
+        net: 520,
+        commits: 33,
+        prs: 5,
+        byRepo: { "ada/repo": { additions: 650, deletions: 130 } },
+      }),
       byDay: {
         "2026-05-14": { "ada/repo": { additions: 100, deletions: 20 } },
         "2026-05-13": { "ada/repo": { additions: 50, deletions: 10 } },
@@ -69,8 +77,33 @@ describe("normalizeStats", () => {
     expect(out.yesterday.lines).toBe(50);
     expect(out.yesterday.date).toBe("2026-05-13");
     expect(out.week.commits).toBe(25);
+    expect(out.total.lines).toBe(650);
+    expect(out.total.prs).toBe(5);
     expect(out.byDay["2026-05-13"]).toEqual({
       "ada/repo": { additions: 50, deletions: 10 },
+    });
+  });
+
+  it("derives total from project-start daily cache when total block is missing", () => {
+    const stats = normalizeAt({
+      byDay: {
+        "2026-05-13": { "ada/before": { additions: 999, deletions: 0 } },
+        "2026-05-14": { "ada/start": { additions: 100, deletions: 20 } },
+        "2026-05-15": { "ada/next": { additions: 50, deletions: 5 } },
+      },
+      byDayCommits: {
+        "2026-05-13": 9,
+        "2026-05-14": 2,
+        "2026-05-15": 3,
+      },
+    });
+
+    expect(stats.total.lines).toBe(150);
+    expect(stats.total.net).toBe(125);
+    expect(stats.total.commits).toBe(5);
+    expect(stats.total.byRepo).toEqual({
+      "ada/start": { additions: 100, deletions: 20 },
+      "ada/next": { additions: 50, deletions: 5 },
     });
   });
 
@@ -248,11 +281,11 @@ describe("normalizeStats", () => {
 });
 
 describe("mergeByDayStats", () => {
-  it("merges new days and preserves old days inside the 30-day window", () => {
+  it("merges new days and preserves days back to the project start", () => {
     const merged = mergeByDayStats({
       today: "2026-05-18",
       existing: {
-        "2026-05-10": { "ada/old": { additions: 10, deletions: 1 } },
+        "2026-05-14": { "ada/old": { additions: 10, deletions: 1 } },
         "2026-05-17": { "ada/stale": { additions: 20, deletions: 2 } },
       },
       fresh: {
@@ -262,24 +295,24 @@ describe("mergeByDayStats", () => {
     });
 
     expect(merged).toEqual({
-      "2026-05-10": { "ada/old": { additions: 10, deletions: 1 } },
+      "2026-05-14": { "ada/old": { additions: 10, deletions: 1 } },
       "2026-05-17": { "ada/fresh": { additions: 30, deletions: 3 } },
       "2026-05-18": { "ada/new": { additions: 40, deletions: 4 } },
     });
   });
 
-  it("rolls off days older than 30 days", () => {
+  it("rolls off days before the project start by default", () => {
     const merged = mergeByDayStats({
       today: "2026-05-18",
       existing: {
-        "2026-04-18": { "ada/too-old": { additions: 10, deletions: 1 } },
-        "2026-04-19": { "ada/kept": { additions: 20, deletions: 2 } },
+        "2026-05-13": { "ada/too-old": { additions: 10, deletions: 1 } },
+        "2026-05-14": { "ada/kept": { additions: 20, deletions: 2 } },
       },
       fresh: {},
     });
 
     expect(merged).toEqual({
-      "2026-04-19": { "ada/kept": { additions: 20, deletions: 2 } },
+      "2026-05-14": { "ada/kept": { additions: 20, deletions: 2 } },
     });
   });
 });
