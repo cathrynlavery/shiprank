@@ -1,18 +1,23 @@
 import { CountUp } from "@/components/count-up";
 import type { RepoStats } from "@/lib/types";
-import { wackyName } from "@/lib/wacky-name";
 
-function repoLabel(repoFullName: string, isPrivate?: boolean) {
-  if (isPrivate) return wackyName(repoFullName);
+function repoLabel(
+  repoFullName: string,
+  isPrivate: boolean,
+  revealNames: boolean,
+) {
+  if (isPrivate && !revealNames) return repoFullName;
   return repoFullName.split("/").at(-1) ?? repoFullName;
 }
 
 export function RepoList({
   repos,
   limit,
+  revealNames = false,
 }: {
   repos: RepoStats;
   limit?: number;
+  revealNames?: boolean;
 }) {
   const entries = Object.entries(repos)
     .sort((a, b) => b[1].additions - a[1].additions)
@@ -21,14 +26,14 @@ export function RepoList({
   if (!entries.length) return <p className="empty">nothing yet</p>;
 
   return entries.map(([repo, stats]) => {
-    const label = repoLabel(repo, stats.private);
+    const isPrivate = stats.private === true;
+    const label = repoLabel(repo, isPrivate, revealNames);
+    const showLink = !isPrivate || revealNames;
 
     return (
       <div className="repo-row" key={repo}>
         <div className="repo-meta">
-          {stats.private ? (
-            <span className="repo-name">{label}</span>
-          ) : (
+          {showLink ? (
             <a
               className="repo-name repo-link"
               href={`https://github.com/${repo}`}
@@ -37,9 +42,11 @@ export function RepoList({
             >
               {label}
             </a>
+          ) : (
+            <span className="repo-name">{label}</span>
           )}
-          <span className={stats.private ? "repo-scope private" : "repo-scope"}>
-            {stats.private ? "private" : "public"}
+          <span className={isPrivate ? "repo-scope private" : "repo-scope"}>
+            {isPrivate ? "private" : "public"}
           </span>
         </div>
         <span className="repo-lines">

@@ -8,6 +8,7 @@ import { RepoList } from "@/components/repo-list";
 import { shortDate, weekRange } from "@/lib/date-label";
 import { formatLines, signedLines } from "@/lib/format";
 import { SHIPRANK_START_DATE } from "@/lib/stats-date";
+import type { DayTotals } from "@/lib/stats-totals";
 import type { PeriodSummary, StatsPayload } from "@/lib/types";
 
 type PeriodKey = "today" | "yesterday" | "week" | "total";
@@ -28,7 +29,17 @@ function periodDigitCount(value: string) {
   return value.length;
 }
 
-export function StatsTabs({ stats }: { stats: StatsPayload }) {
+export type StatsTabsPayload = Omit<StatsPayload, "byDay">;
+
+export function StatsTabs({
+  stats,
+  dayTotals,
+  revealNames = false,
+}: {
+  stats: StatsTabsPayload;
+  dayTotals: DayTotals;
+  revealNames?: boolean;
+}) {
   const [activeKey, setActiveKey] = useState<PeriodKey>("today");
   const periods: Period[] = [
     {
@@ -123,13 +134,17 @@ export function StatsTabs({ stats }: { stats: StatsPayload }) {
         {active.showChart ? (
           <section className="section compact-section">
             <h2 className="section-head">last 7 days</h2>
-            <ActivityChart byDay={stats.byDay} today={stats.today.date} />
+            <ActivityChart dayTotals={dayTotals} today={stats.today.date} />
           </section>
         ) : null}
 
         <section className="section compact-section">
           <h2 className="section-head">{active.projectHead}</h2>
-          <RepoList repos={active.summary.byRepo} limit={active.repoLimit} />
+          <RepoList
+            repos={active.summary.byRepo}
+            limit={active.repoLimit}
+            revealNames={revealNames}
+          />
         </section>
       </div>
     </section>

@@ -1,6 +1,7 @@
 import {
   createCipheriv,
   createDecipheriv,
+  createHmac,
   randomBytes,
 } from "node:crypto";
 
@@ -67,4 +68,14 @@ export function decryptToken(value: string): {
     ]).toString("utf8"),
     migrated: false,
   };
+}
+
+export function repoLabelSecret(): string | null {
+  try {
+    return createHmac("sha256", tokenKey())
+      .update("repo-label-v1")
+      .digest("hex");
+  } catch {
+    return null;
+  }
 }
