@@ -5,11 +5,14 @@ import { FirstRefresh } from "@/components/first-refresh";
 import { ManualRefreshButton } from "@/components/manual-refresh-button";
 import { OAuthStateBanner } from "@/components/oauth-state-banner";
 import { StatsPage } from "@/components/stats-page";
+import { repoLabelSecret } from "@/lib/crypto";
 import {
   githubFullSettingsUrl,
   signInWithGithubFullEnabled,
 } from "@/lib/oauth-config";
+import { redactPrivateRepoNames } from "@/lib/redact-stats";
 import { getStats, getUser } from "@/lib/store";
+import { dayAdditionTotals } from "@/lib/stats-totals";
 import { statsDate } from "@/lib/stats-date";
 
 export const dynamic = "force-dynamic";
@@ -42,10 +45,14 @@ export async function generateMetadata({
 
 export default async function UserPage({ params }: UserPageProps) {
   const { username } = await params;
-  const [stats, session] = await Promise.all([getStats(username), auth()]);
+  const [rawStats, session] = await Promise.all([getStats(username), auth()]);
 
-  if (stats) {
+  if (rawStats) {
     const isOwnProfile = session?.githubUsername === username;
+    const stats = isOwnProfile
+      ? rawStats
+      : redactPrivateRepoNames(rawStats, repoLabelSecret());
+    const dayTotals = dayAdditionTotals(stats.byDay);
     const user = isOwnProfile ? await getUser(username) : null;
     const oauthState =
       user?.oauth?.revokedAt
@@ -57,6 +64,8 @@ export default async function UserPage({ params }: UserPageProps) {
     return (
       <StatsPage
         stats={stats}
+        dayTotals={dayTotals}
+        revealNames={isOwnProfile}
         ownerTopControls={isOwnProfile ? <ManualRefreshButton /> : null}
         ownerBottomControls={
           isOwnProfile ? (
