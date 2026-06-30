@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function format(n: number, signed: boolean, suffix?: string) {
   const formatted =
@@ -19,16 +19,25 @@ export function CountUp({
   signed?: boolean;
   suffix?: string;
 }) {
-  const [n, setN] = useState(0);
+  const [n, setN] = useState(value);
+  const previousValue = useRef(value);
 
   useEffect(() => {
+    const from = previousValue.current;
+    previousValue.current = value;
+
+    if (from === value) {
+      setN(value);
+      return;
+    }
+
     const start = performance.now();
     let raf = 0;
     const tick = (t: number) => {
       const elapsed = t - start;
       const p = Math.min(1, elapsed / durationMs);
       const eased = 1 - Math.pow(1 - p, 3);
-      setN(Math.round(Math.max(0, value) * eased));
+      setN(Math.round(from + (value - from) * eased));
       if (p < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
