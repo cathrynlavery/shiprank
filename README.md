@@ -30,7 +30,7 @@ Private repos count toward your total, but their contents stay private:
 - Auth.js v5 (GitHub sign-in, scopes: `read:user user:email`)
 - Vercel KV (Upstash Redis)
 - GitHub Actions scheduled refreshes every 2 hours from 8 AM to midnight Central
-- `next/og` for Twitter / OG share cards
+- SVG share cards with browser-side PNG export, plus `next/og` profile cards
 - Geist + Geist Mono, dark/light mode, no CSS framework
 
 Visual style is Visualize Value: black, white, monospace, thin 1px rules, single max-width column.
@@ -50,6 +50,17 @@ The default local server uses Next's webpack dev bundler on `127.0.0.1` with a
 768 MB Node heap cap. Turbopack can use substantially more memory in this app
 when the browser reconnects and preloads profile/share-image routes. If you
 specifically need to debug Turbopack behavior, run `npm run dev:turbo`.
+
+For lightweight local testing without hot reload, use:
+
+```bash
+npm run preview
+```
+
+This creates a memory-capped production build and starts it on `127.0.0.1:3000`
+with `.local-data/shiprank-store.json` enabled automatically. The running server
+uses substantially less memory than `next dev`; rerun the command after source
+changes. If the build already exists, `npm run start:local` skips the rebuild.
 
 For local testing, create a GitHub App and set these URLs:
 

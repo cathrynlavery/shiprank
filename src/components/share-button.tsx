@@ -36,6 +36,8 @@ async function svgToPngBlob(svg: string) {
     canvas.height = 1080;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("image export is not supported here");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
     return await new Promise<Blob>((resolve, reject) => {
