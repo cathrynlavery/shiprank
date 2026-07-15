@@ -93,8 +93,9 @@ export function OAuthStateBanner({
         Counting only repos owned by you and your orgs. GitHub will ask
         permission for repo access, the smallest scope that lets the search API
         find commits in repos you collaborate on. ShipRank only uses it to count
-        line additions and deletions per commit. We never display private repo
-        names, commit messages, or code.
+        line additions and deletions per commit. Public repo names and aggregate
+        stats are shown; private repo names are shown only to you while signed
+        in. Commit messages, code, diffs, and file names are not shown.
       </p>
       <div className="permission-notice-action">
         <FullVisibilityForm enabled={enabled} username={username}>

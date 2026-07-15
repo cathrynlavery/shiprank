@@ -1,15 +1,10 @@
-import type { StatsPayload } from "@/lib/types";
-
-function dayTotal(repos: StatsPayload["today"]["byRepo"] | undefined) {
-  if (!repos) return 0;
-  return Object.values(repos).reduce((sum, stats) => sum + stats.additions, 0);
-}
+import type { DayTotals } from "@/lib/stats-totals";
 
 export function ActivityChart({
-  byDay,
+  dayTotals,
   today,
 }: {
-  byDay: StatsPayload["byDay"];
+  dayTotals: DayTotals;
   today: string;
 }) {
   const days = Array.from({ length: 7 }, (_, index) => {
@@ -22,7 +17,7 @@ export function ActivityChart({
       day: ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][
         date.getUTCDay()
       ],
-      total: dayTotal(byDay[dateString]),
+      total: dayTotals[dateString] ?? 0,
     };
   });
   const max = Math.max(...days.map((day) => day.total), 1);

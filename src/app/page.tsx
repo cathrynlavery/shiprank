@@ -10,8 +10,9 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { UpdateTimestamp } from "@/components/update-timestamp";
 import { shortDate, weekRange } from "@/lib/date-label";
 import { getAllStats, getUser } from "@/lib/store";
-import { statsDate } from "@/lib/stats-date";
-import type { PeriodSummary, RepoStats, StatsPayload } from "@/lib/types";
+import { dayAdditionTotals, type DayTotals } from "@/lib/stats-totals";
+import { SHIPRANK_START_DATE, statsDate } from "@/lib/stats-date";
+import type { PeriodSummary, StatsPayload } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ type HomeProps = {
   }>;
 };
 
-type RangeKey = "today" | "yesterday" | "week";
+type RangeKey = "today" | "yesterday" | "week" | "total";
 
 type RangeDef = {
   label: string;
@@ -50,9 +51,15 @@ const RANGES: Record<RangeKey, RangeDef> = {
     period: (s) => s.week,
     date: (s) => s.today.date,
   },
+  total: {
+    label: "since ShipRank started",
+    toggleLabel: "total",
+    period: (s) => s.total,
+    date: (s) => s.today.date,
+  },
 };
 
-const RANGE_ORDER: RangeKey[] = ["today", "yesterday", "week"];
+const RANGE_ORDER: RangeKey[] = ["today", "yesterday", "week", "total"];
 
 function parseRange(value: string | undefined): RangeKey {
   return (RANGE_ORDER as string[]).includes(value ?? "")
@@ -60,15 +67,11 @@ function parseRange(value: string | undefined): RangeKey {
     : "today";
 }
 
-function aggregateByDay(allStats: StatsPayload[]): StatsPayload["byDay"] {
-  const out: StatsPayload["byDay"] = {};
+function aggregateDayTotals(allStats: StatsPayload[]): DayTotals {
+  const out: DayTotals = {};
   for (const stats of allStats) {
-    for (const [date, repos] of Object.entries(stats.byDay)) {
-      const bucket: RepoStats = (out[date] ??= {});
-      for (const [repoFullName, repoStats] of Object.entries(repos)) {
-        const scopedKey = `${stats.username}::${repoFullName}`;
-        bucket[scopedKey] = repoStats;
-      }
+    for (const [date, total] of Object.entries(dayAdditionTotals(stats.byDay))) {
+      out[date] = (out[date] ?? 0) + total;
     }
   }
   return out;
@@ -117,7 +120,11 @@ export default async function Home({ searchParams }: HomeProps) {
   const leader = leaderboard[0];
   const heroDate = leader?.date ?? statsDate();
   const heroDateLabel =
-    mode === "week" ? weekRange(heroDate) : shortDate(heroDate);
+    mode === "week"
+      ? weekRange(heroDate)
+      : mode === "total"
+        ? `since ${shortDate(SHIPRANK_START_DATE)}`
+        : shortDate(heroDate);
   const heroLines = leaderboard.reduce((sum, entry) => sum + entry.lines, 0);
   const heroCommits = leaderboard.reduce(
     (sum, entry) => sum + entry.commits,
@@ -126,7 +133,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const heroPrs = leaderboard.reduce((sum, entry) => sum + entry.prs, 0);
   const heroTotal = sortBy === "prs" ? heroPrs : heroLines;
   const devCount = leaderboard.length;
-  const collectiveByDay = aggregateByDay(allStats);
+  const collectiveDayTotals = aggregateDayTotals(allStats);
   const todayForChart = allStats[0]?.today.date ?? heroDate;
   const currentUser = session?.githubUsername
     ? await getUser(session.githubUsername)
@@ -213,7 +220,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
       <section className="section">
         <h2 className="section-head">last 7 days</h2>
-        <ActivityChart byDay={collectiveByDay} today={todayForChart} />
+        <ActivityChart dayTotals={collectiveDayTotals} today={todayForChart} />
       </section>
 
       <section className="section">
@@ -265,9 +272,9 @@ export default async function Home({ searchParams }: HomeProps) {
         <details className="collapsible">
           <summary className="section-head">privacy</summary>
           <p className="prose">
-            Private repository names are never shown publicly. ShipRank only
-            shows aggregate totals on the leaderboard. On your profile, private
-            repos are replaced with deterministic anonymous names.
+            Private repo names are shown only to the signed-in owner. Public
+            repo names and aggregate stats are shown on profile pages and the
+            leaderboard.
           </p>
         </details>
 
@@ -283,8 +290,8 @@ export default async function Home({ searchParams }: HomeProps) {
         <details className="collapsible">
           <summary className="section-head">what we do not show</summary>
           <p className="prose">
-            We do not publish private repo names, commit messages, file names,
-            code, or diffs.
+            We do not publish private repo names to other viewers, code, diffs,
+            file names, or commit messages.
           </p>
         </details>
       </div>

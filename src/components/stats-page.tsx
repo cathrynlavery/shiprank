@@ -1,19 +1,34 @@
 import Link from "next/link";
 import { ShareButton } from "@/components/share-button";
-import { StatsTabs } from "@/components/stats-tabs";
+import { StatsTabs, type StatsTabsPayload } from "@/components/stats-tabs";
 import { UpdateTimestamp } from "@/components/update-timestamp";
+import type { DayTotals } from "@/lib/stats-totals";
 import type { StatsPayload } from "@/lib/types";
 import type { ReactNode } from "react";
 
 export function StatsPage({
   stats,
+  dayTotals,
+  revealNames = false,
   ownerTopControls,
   ownerBottomControls,
 }: {
   stats: StatsPayload;
+  dayTotals: DayTotals;
+  revealNames?: boolean;
   ownerTopControls?: ReactNode;
   ownerBottomControls?: ReactNode;
 }) {
+  const statsForTabs = {
+    username: stats.username,
+    generated: stats.generated,
+    today: stats.today,
+    yesterday: stats.yesterday,
+    week: stats.week,
+    total: stats.total,
+    byDayCommits: stats.byDayCommits,
+  } satisfies StatsTabsPayload;
+
   return (
     <main className="wrap">
       <div className="topline">
@@ -41,7 +56,11 @@ export function StatsPage({
       </div>
       <UpdateTimestamp generated={stats.generated} />
       {ownerTopControls}
-      <StatsTabs stats={stats} />
+      <StatsTabs
+        stats={statsForTabs}
+        dayTotals={dayTotals}
+        revealNames={revealNames}
+      />
       {ownerBottomControls}
     </main>
   );

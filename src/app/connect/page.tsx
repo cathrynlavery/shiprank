@@ -56,8 +56,10 @@ export default async function ConnectPage() {
       <section className="section">
         <h2 className="section-head">what shows publicly</h2>
         <p className="prose">
-          Private repo names are anonymized publicly, and code, diffs, file
-          names, and commit messages are not published.
+          Public repo names and aggregate stats are shown. Private repo names
+          are shown only to the signed-in owner; other viewers see anonymous
+          labels. Code, diffs, file names, and commit messages are not
+          published.
         </p>
         <div className="example-list" aria-label="private repository example">
           <div className="example-row">
@@ -65,8 +67,12 @@ export default async function ConnectPage() {
             <span>acme/secret-roadmap</span>
           </div>
           <div className="example-row">
-            <span>public display</span>
+            <span>other viewers see</span>
             <span>Stellar Voyager 7f3</span>
+          </div>
+          <div className="example-row">
+            <span>you see</span>
+            <span>secret-roadmap</span>
           </div>
           <div className="example-row">
             <span>stats shown</span>

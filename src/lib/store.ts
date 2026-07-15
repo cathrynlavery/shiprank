@@ -2,7 +2,11 @@ import { kv } from "@vercel/kv";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { decryptToken, encryptToken, isEncryptedToken } from "@/lib/crypto";
-import { addStatsDays, statsDate } from "@/lib/stats-date";
+import {
+  addStatsDays,
+  SHIPRANK_START_DATE,
+  statsDate,
+} from "@/lib/stats-date";
 import type {
   RepoLineStats,
   RepoStats,
@@ -254,6 +258,51 @@ function dayBefore(isoDate: string): string {
   return addStatsDays(isoDate, -1);
 }
 
+function retentionCutoff({
+  today,
+  keepDays,
+  keepFromDate = SHIPRANK_START_DATE,
+}: {
+  today: string;
+  keepDays?: number;
+  keepFromDate?: string;
+}) {
+  if (!keepDays) return keepFromDate;
+
+  const dayCutoff = addStatsDays(today, -(keepDays - 1));
+  return dayCutoff > keepFromDate ? dayCutoff : keepFromDate;
+}
+
+function rollupReposSince(byDay: StatsPayload["byDay"], startDate: string) {
+  const rolledUp: RepoStats = {};
+
+  for (const [date, repos] of Object.entries(byDay)) {
+    if (date < startDate) continue;
+    for (const [repoFullName, stats] of Object.entries(repos)) {
+      rolledUp[repoFullName] ??= {
+        additions: 0,
+        deletions: 0,
+        private: stats.private,
+      };
+      rolledUp[repoFullName].additions += stats.additions;
+      rolledUp[repoFullName].deletions += stats.deletions;
+      rolledUp[repoFullName].private = stats.private;
+    }
+  }
+
+  return rolledUp;
+}
+
+function sumCommitsSince(
+  byDayCommits: Record<string, number>,
+  startDate: string,
+) {
+  return Object.entries(byDayCommits).reduce(
+    (sum, [date, count]) => (date >= startDate ? sum + count : sum),
+    0,
+  );
+}
+
 function validTimestamp(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const time = new Date(value).getTime();
@@ -272,6 +321,10 @@ function commitStatsKey(repoFullName: string, sha: string) {
   return `commit-stats:${encodeURIComponent(repoFullName)}:${sha}`;
 }
 
+function prCountKey(username: string, tokenSource: string, query: string) {
+  return `pr-count:${encodeURIComponent(username)}:${tokenSource}:${encodeURIComponent(query)}`;
+}
+
 export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
   const r = asRecord(raw);
   const today = asRecord(r.today);
@@ -279,6 +332,7 @@ export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
   const week = asRecord(r.week);
   const weekByRepo = asRepoStats(week.byRepo);
   const weekLines = asNumber(week.lines ?? week.total);
+  const total = asRecord(r.total);
   const currentDate = statsDate(now);
   const currentYesterdayDate = dayBefore(currentDate);
 
@@ -289,9 +343,9 @@ export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
     r.byDay && typeof r.byDay === "object"
       ? (r.byDay as StatsPayload["byDay"])
       : {};
-  const byDayCommits: StatsPayload["byDayCommits"] =
+  const byDayCommits: Record<string, number> =
     r.byDayCommits && typeof r.byDayCommits === "object"
-      ? (r.byDayCommits as StatsPayload["byDayCommits"])
+      ? (r.byDayCommits as Record<string, number>)
       : {};
 
   const storedToday = normalizePeriod(today, byDay[todayDate] ?? {});
@@ -299,6 +353,8 @@ export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
     yesterday,
     byDay[yesterdayDate] ?? {},
   );
+  const totalByRepoFallback = rollupReposSince(byDay, SHIPRANK_START_DATE);
+  const normalizedTotal = normalizePeriod(total, totalByRepoFallback);
 
   let normalizedTodayDate = todayDate;
   let normalizedToday = storedToday;
@@ -339,6 +395,13 @@ export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
       commits: asNumber(week.commits),
       prs: asNumber(week.prs),
       byRepo: weekByRepo,
+    },
+    total: {
+      ...normalizedTotal,
+      commits: asNumber(
+        total.commits,
+        sumCommitsSince(byDayCommits, SHIPRANK_START_DATE),
+      ),
     },
     byDay,
     byDayCommits,
@@ -491,6 +554,32 @@ export async function saveCachedCommitStats(
   });
 }
 
+export async function getCachedPrCount(
+  username: string,
+  tokenSource: string,
+  query: string,
+) {
+  if (!hasKv()) return null;
+  const count = asNumber(
+    await kv.get(prCountKey(username, tokenSource, query)),
+    -1,
+  );
+  return count >= 0 ? count : null;
+}
+
+export async function saveCachedPrCount(
+  username: string,
+  tokenSource: string,
+  query: string,
+  count: number,
+  ttlSeconds: number,
+) {
+  if (!hasKv()) return;
+  await kv.set(prCountKey(username, tokenSource, query), count, {
+    ex: ttlSeconds,
+  });
+}
+
 export async function getAllUsers() {
   if (hasLocalStore()) {
     const keys = await localKeys("user:");
@@ -541,14 +630,16 @@ export function mergeByDayStats({
   existing,
   fresh,
   today,
-  keepDays = 30,
+  keepDays,
+  keepFromDate = SHIPRANK_START_DATE,
 }: {
   existing: StatsPayload["byDay"];
   fresh: StatsPayload["byDay"];
   today: string;
   keepDays?: number;
+  keepFromDate?: string;
 }) {
-  const cutoff = addStatsDays(today, -(keepDays - 1));
+  const cutoff = retentionCutoff({ today, keepDays, keepFromDate });
   const merged: StatsPayload["byDay"] = {};
 
   for (const [date, repos] of Object.entries({ ...existing, ...fresh })) {
@@ -562,14 +653,16 @@ export function mergeByDayCommits({
   existing,
   fresh,
   today,
-  keepDays = 30,
+  keepDays,
+  keepFromDate = SHIPRANK_START_DATE,
 }: {
   existing: Record<string, number>;
   fresh: Record<string, number>;
   today: string;
   keepDays?: number;
+  keepFromDate?: string;
 }) {
-  const cutoff = addStatsDays(today, -(keepDays - 1));
+  const cutoff = retentionCutoff({ today, keepDays, keepFromDate });
   const merged: Record<string, number> = {};
 
   for (const [date, count] of Object.entries({ ...existing, ...fresh })) {
