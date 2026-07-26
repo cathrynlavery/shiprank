@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "setup:local": "node scripts/setup-local-env.mjs",
-    "dev": "node --max-old-space-size=768 ./node_modules/next/dist/bin/next dev --webpack --disable-source-maps --hostname 127.0.0.1",
-    "dev:turbo": "next dev --turbopack",
+    "dev": "next dev",
+    "dev:lowmem": "node --max-old-space-size=768 ./node_modules/next/dist/bin/next dev --webpack --disable-source-maps --hostname 127.0.0.1",
     "build": "next build",
     "build:local": "node --max-old-space-size=768 ./node_modules/next/dist/bin/next build",
     "preview": "npm run build:local && npm run start:local",

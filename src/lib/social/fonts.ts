@@ -16,29 +16,22 @@ function toArrayBuffer(buffer: Buffer) {
   ) as ArrayBuffer;
 }
 
+async function loadFont(file: string) {
+  return toArrayBuffer(
+    await readFile(join(process.cwd(), "src", "lib", "social", "fonts", file)),
+  );
+}
+
 export function loadSocialFonts(): Promise<SocialFonts> {
   if (cached) return cached;
 
   cached = (async () => {
-    const geist = toArrayBuffer(
-      await readFile(
-        join(
-          process.cwd(),
-          "node_modules",
-          "next",
-          "dist",
-          "compiled",
-          "@vercel",
-          "og",
-          "Geist-Regular.ttf",
-        ),
-      ),
-    );
-    return {
-      sans: geist,
-      sansBold: geist.slice(0),
-      mono: geist.slice(0),
-    };
+    const [sans, sansBold, mono] = await Promise.all([
+      loadFont("Geist-Regular.ttf"),
+      loadFont("Geist-Bold.ttf"),
+      loadFont("GeistMono-Regular.ttf"),
+    ]);
+    return { sans, sansBold, mono };
   })().catch((error) => {
     cached = null;
     throw error;

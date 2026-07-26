@@ -487,7 +487,7 @@ export function ProfileOgCard(data: ProfileOgData) {
             textTransform: "uppercase",
           }}
         >
-          lines shipped / @{data.username}
+          {`lines shipped / @${data.username}`}
         </div>
       </div>
 
@@ -521,7 +521,7 @@ export function ProfileOgCard(data: ProfileOgData) {
             textTransform: "none",
           }}
         >
-          shiprank.dev/{data.username}
+          {`shiprank.dev/${data.username}`}
         </div>
       </div>
     </div>

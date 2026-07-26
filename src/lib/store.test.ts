@@ -334,13 +334,11 @@ describe("mergeByDayStats", () => {
 describe("development local store", () => {
   let dir: string;
   let storePath: string;
-  let cwd: string;
 
   beforeEach(async () => {
-    cwd = process.cwd();
     dir = await mkdtemp(join(tmpdir(), "shiprank-store-"));
-    process.chdir(dir);
-    storePath = join(dir, ".local-data", "shiprank-store.json");
+    storePath = join(dir, "shiprank-store.json");
+    vi.stubEnv("SHIPRANK_LOCAL_STORE_DIR", dir);
     vi.stubEnv("SHIPRANK_USE_LOCAL_STORE", "1");
     vi.stubEnv("TOKEN_ENCRYPTION_KEY", "12345678901234567890123456789012");
     vi.stubEnv("KV_REST_API_URL", "");
@@ -348,7 +346,6 @@ describe("development local store", () => {
   });
 
   afterEach(async () => {
-    process.chdir(cwd);
     vi.unstubAllEnvs();
     await rm(dir, { recursive: true, force: true });
   });
@@ -371,6 +368,7 @@ describe("development local store", () => {
       today: makePeriod({ date: statsDate(), lines: 10 }),
       yesterday: makePeriod({ lines: 5 }),
       week: makePeriod({ lines: 15 }),
+      total: makePeriod({ lines: 30 }),
       byDay: {},
     });
     const afterStats = JSON.parse(await readFile(storePath, "utf8"));

@@ -1,7 +1,6 @@
 import { shortDate, weekRange } from "@/lib/date-label";
 import { formatLines, signedLines } from "@/lib/format";
 import type { RepoStats, StatsPayload } from "@/lib/types";
-import { wackyName } from "@/lib/wacky-name";
 
 export type StatItem = {
   label: string;
@@ -51,8 +50,10 @@ function netLabel(value: number) {
   return value > 0 ? `+${formatLines(value)}` : formatLines(value);
 }
 
+// Private entries arrive already masked by redactPrivateRepoNames, so their key
+// is a display label rather than an owner/repo pair. Matches RepoList.
 function repoLabel(repoFullName: string, isPrivate?: boolean) {
-  if (isPrivate) return wackyName(repoFullName);
+  if (isPrivate) return repoFullName;
   return repoFullName.split("/").at(-1) ?? repoFullName;
 }
 

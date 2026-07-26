@@ -46,10 +46,11 @@ npm run setup:local
 npm run dev
 ```
 
-The default local server uses Next's webpack dev bundler on `127.0.0.1` with a
-768 MB Node heap cap. Turbopack can use substantially more memory in this app
-when the browser reconnects and preloads profile/share-image routes. If you
-specifically need to debug Turbopack behavior, run `npm run dev:turbo`.
+`npm run dev` runs the standard Turbopack dev server. Turbopack can use
+substantially more memory in this app when the browser reconnects and preloads
+profile/share-image routes; if that's a problem on your machine, `npm run
+dev:lowmem` falls back to the webpack bundler on `127.0.0.1` with a 768 MB Node
+heap cap and source maps disabled.
 
 For lightweight local testing without hot reload, use:
 

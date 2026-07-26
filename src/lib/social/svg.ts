@@ -16,8 +16,10 @@ const FONT_MONO = "ShipRank Geist Mono";
 
 let fontCssPromise: Promise<string> | null = null;
 
-async function fontDataUri(path: string) {
-  const font = await readFile(path);
+async function fontDataUri(file: string) {
+  const font = await readFile(
+    join(process.cwd(), "src", "lib", "social", "fonts", file),
+  );
   return `data:font/woff2;base64,${font.toString("base64")}`;
 }
 
@@ -25,32 +27,9 @@ export function loadSvgFontCss() {
   if (fontCssPromise) return fontCssPromise;
 
   fontCssPromise = (async () => {
-    const root = process.cwd();
     const [sans, mono] = await Promise.all([
-      fontDataUri(
-        join(
-          root,
-          "node_modules",
-          "next",
-          "dist",
-          "next-devtools",
-          "server",
-          "font",
-          "geist-latin.woff2",
-        ),
-      ),
-      fontDataUri(
-        join(
-          root,
-          "node_modules",
-          "next",
-          "dist",
-          "next-devtools",
-          "server",
-          "font",
-          "geist-mono-latin.woff2",
-        ),
-      ),
+      fontDataUri("Geist-Variable.woff2"),
+      fontDataUri("GeistMono-Variable.woff2"),
     ]);
 
     return `
@@ -73,6 +52,10 @@ export function loadSvgFontCss() {
   })();
 
   return fontCssPromise;
+}
+
+function truncate(value: string, max: number) {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
 function escapeXml(value: string) {
@@ -192,12 +175,16 @@ export function reposCardSvg(data: ReposCardData, fontCss: string) {
         .map((repo, index) => {
           const y = 422 + index * 102;
           const barWidth = Math.max(20, (repo.lines / maxLines) * 540);
+          const name = truncate(repo.name, 28);
+          // Geist advances at roughly 0.58em, so measure the truncated label
+          // rather than the raw name or the pill lands on top of the text.
+          const pillX = PAD + 58 + Math.min(540, name.length * 19.7) + 16;
           return `
   <line x1="${PAD}" y1="${y - 30}" x2="${WIDTH - PAD}" y2="${y - 30}" stroke="#ebebeb" stroke-width="1"/>
   ${text({ x: PAD, y, value: String(index + 1).padStart(2, "0"), size: 18, fill: "#888" })}
-  ${text({ x: PAD + 58, y, value: repo.name.slice(0, 28), size: 34, family: FONT_SANS })}
-  <rect x="${PAD + 58 + Math.min(560, repo.name.length * 18)}" y="${y - 25}" width="${repo.scope === "private" ? 62 : 54}" height="24" fill="#fff" stroke="${repo.scope === "private" ? "#d8d8d8" : "#000"}"/>
-  ${text({ x: PAD + 66 + Math.min(560, repo.name.length * 18), y: y - 7, value: repo.scope, size: 12, fill: repo.scope === "private" ? "#888" : "#000" })}
+  ${text({ x: PAD + 58, y, value: name, size: 34, family: FONT_SANS })}
+  <rect x="${pillX}" y="${y - 25}" width="${repo.scope === "private" ? 62 : 54}" height="24" fill="#fff" stroke="${repo.scope === "private" ? "#d8d8d8" : "#000"}"/>
+  ${text({ x: pillX + 8, y: y - 7, value: repo.scope, size: 12, fill: repo.scope === "private" ? "#888" : "#000" })}
   ${text({ x: WIDTH - PAD, y, value: `+${formatLines(repo.lines)}`, size: 40, family: FONT_SANS, anchor: "end" })}
   <rect x="${PAD + 58}" y="${y + 20}" width="540" height="8" fill="#ebebeb"/>
   <rect x="${PAD + 58}" y="${y + 20}" width="${barWidth}" height="8" fill="#000"/>`;

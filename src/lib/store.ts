@@ -39,11 +39,9 @@ export function isLocalStoreEnabled() {
 }
 
 function localStorePath() {
-  return join(
-    /*turbopackIgnore: true*/ process.cwd(),
-    ".local-data",
-    "shiprank-store.json",
-  );
+  const dir = process.env.SHIPRANK_LOCAL_STORE_DIR;
+  if (dir) return join(dir, "shiprank-store.json");
+  return join(process.cwd(), ".local-data", "shiprank-store.json");
 }
 
 async function readLocalStore(): Promise<LocalStore> {
