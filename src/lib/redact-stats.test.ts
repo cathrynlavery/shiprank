@@ -138,6 +138,30 @@ describe("redactPrivateRepoNames", () => {
     );
   });
 
+  it("masks a repo in periods that still record it as public", () => {
+    // A repo that just flipped to private: today knows, the retained total does not.
+    const redacted = redactPrivateRepoNames(
+      makeStats({
+        total: makePeriod({
+          "owner/secret-roadmap": {
+            additions: 120,
+            deletions: 20,
+            private: false,
+          },
+        }),
+      }),
+      "fixed-secret",
+    );
+
+    expect(Object.keys(redacted.total.byRepo)).not.toContain(
+      "owner/secret-roadmap",
+    );
+    expect(privateRepoKey(redacted.total.byRepo)).toBe(
+      privateRepoKey(redacted.today.byRepo),
+    );
+    expect(JSON.stringify(redacted)).not.toContain("owner/secret-roadmap");
+  });
+
   it("uses different private labels with different secrets", () => {
     const first = redactPrivateRepoNames(makeStats(), "secret-one");
     const second = redactPrivateRepoNames(makeStats(), "secret-two");

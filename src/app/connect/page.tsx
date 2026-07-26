@@ -5,6 +5,9 @@ import { githubAppInstallUrl } from "@/lib/github-app";
 export default async function ConnectPage() {
   const session = await auth();
   const installUrl = githubAppInstallUrl();
+  const label = session?.githubUsername
+    ? "reconnect with github"
+    : "connect with github";
 
   return (
     <main className="wrap">
@@ -27,15 +30,8 @@ export default async function ConnectPage() {
         repositories.
       </p>
       <div className="connect-actions connect-actions-primary">
-        <a
-          className="button github-connect-button"
-          href={installUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {session?.githubUsername
-            ? "reconnect with github"
-            : "connect with github"}
+        <a className="button github-connect-button" href={installUrl}>
+          {label}
         </a>
       </div>
 
@@ -47,12 +43,12 @@ export default async function ConnectPage() {
             <span>read-only</span>
           </div>
           <div className="permission-row">
-            <span>repository contents</span>
+            <span>public activity metadata</span>
             <span>read-only</span>
           </div>
           <div className="permission-row">
-            <span>pull requests</span>
-            <span>read-only</span>
+            <span>private repo access</span>
+            <span>optional later</span>
           </div>
         </div>
       </section>
@@ -88,23 +84,15 @@ export default async function ConnectPage() {
       <section className="section">
         <h2 className="section-head">your control</h2>
         <p className="prose">
-          With the GitHub App setup, you choose which repositories ShipRank can
-          read. Select all repositories if you want your total line count to
-          include everything you ship. Select specific repositories if you only
-          want those projects counted.
+          Start by choosing the repositories ShipRank can read in GitHub. After
+          installation, GitHub returns you to ShipRank to finish sign-in and
+          create your profile.
         </p>
       </section>
 
       <div className="connect-actions">
-        <a
-          className="button cta-button"
-          href={installUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {session?.githubUsername
-            ? "reconnect with github"
-            : "connect with github"}
+        <a className="button cta-button" href={installUrl}>
+          {label}
         </a>
         <Link className="button button-secondary" href="/">
           back

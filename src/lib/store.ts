@@ -1,4 +1,6 @@
 import { kv } from "@vercel/kv";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { decryptToken, encryptToken, isEncryptedToken } from "@/lib/crypto";
 import {
   addStatsDays,
@@ -15,9 +17,92 @@ import type {
 const LATEST_STATS_GENERATED_KEY = "stats:latest-generated";
 const COMMIT_STATS_TTL_SECONDS = 60 * 60 * 24 * 30;
 const TOKEN_AUDIT_TTL_SECONDS = 60 * 60 * 24 * 90;
+type LocalStore = {
+  values: Record<string, unknown>;
+};
+let localWriteQueue = Promise.resolve();
 
 function hasKv() {
   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
+function hasLocalStore() {
+  return (
+    !hasKv() &&
+    (process.env.NODE_ENV === "development" ||
+      process.env.SHIPRANK_USE_LOCAL_STORE === "1")
+  );
+}
+
+export function isLocalStoreEnabled() {
+  return hasLocalStore();
+}
+
+function localStorePath() {
+  const dir = process.env.SHIPRANK_LOCAL_STORE_DIR;
+  if (dir) return join(dir, "shiprank-store.json");
+  return join(process.cwd(), ".local-data", "shiprank-store.json");
+}
+
+async function readLocalStore(): Promise<LocalStore> {
+  try {
+    const content = await readFile(localStorePath(), "utf8");
+    const parsed = JSON.parse(content) as LocalStore;
+    return parsed && typeof parsed === "object" && parsed.values
+      ? parsed
+      : { values: {} };
+  } catch {
+    return { values: {} };
+  }
+}
+
+async function writeLocalStore(store: LocalStore) {
+  const path = localStorePath();
+  const tmpPath = `${path}.${process.pid}.tmp`;
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2));
+  await rename(tmpPath, path);
+}
+
+async function waitForLocalWrites() {
+  try {
+    await localWriteQueue;
+  } catch {
+    // The original caller receives the write failure; later reads should still proceed.
+  }
+}
+
+async function updateLocalStore(
+  update: (store: LocalStore) => void,
+): Promise<void> {
+  const nextWrite = localWriteQueue.then(async () => {
+    const store = await readLocalStore();
+    update(store);
+    await writeLocalStore(store);
+  });
+  localWriteQueue = nextWrite.catch(() => undefined);
+  await nextWrite;
+}
+
+async function localGet<T>(key: string): Promise<T | null> {
+  if (!hasLocalStore()) return null;
+  await waitForLocalWrites();
+  const store = await readLocalStore();
+  return (store.values[key] as T | undefined) ?? null;
+}
+
+async function localSet(key: string, value: unknown) {
+  if (!hasLocalStore()) return;
+  await updateLocalStore((store) => {
+    store.values[key] = value;
+  });
+}
+
+async function localKeys(prefix: string) {
+  if (!hasLocalStore()) return [];
+  await waitForLocalWrites();
+  const store = await readLocalStore();
+  return Object.keys(store.values).filter((key) => key.startsWith(prefix));
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -322,13 +407,20 @@ export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
 }
 
 export async function saveUser(user: StoredUser) {
+  if (hasLocalStore()) {
+    await localSet(`user:${user.username}`, encryptUserForStorage(user));
+    return;
+  }
   if (!hasKv()) return;
   await kv.set(`user:${user.username}`, encryptUserForStorage(user));
 }
 
 export async function getUser(username: string) {
-  if (!hasKv()) return null;
-  const raw = await kv.get<StoredUser>(`user:${username}`);
+  const raw = hasLocalStore()
+    ? await localGet<StoredUser>(`user:${username}`)
+    : hasKv()
+      ? await kv.get<StoredUser>(`user:${username}`)
+      : null;
   if (!raw) return null;
 
   const { user, migrated } = decryptUserFromStorage(raw);
@@ -338,6 +430,13 @@ export async function getUser(username: string) {
 }
 
 export async function saveStats(stats: StatsPayload) {
+  if (hasLocalStore()) {
+    await Promise.all([
+      localSet(`stats:${stats.username}`, stats),
+      localSet(LATEST_STATS_GENERATED_KEY, new Date().toISOString()),
+    ]);
+    return;
+  }
   if (!hasKv()) return;
   await Promise.all([
     kv.set(`stats:${stats.username}`, stats),
@@ -346,12 +445,25 @@ export async function saveStats(stats: StatsPayload) {
 }
 
 export async function getStats(username: string) {
-  if (!hasKv()) return null;
-  const raw = await kv.get(`stats:${username}`);
+  const raw = hasLocalStore()
+    ? await localGet(`stats:${username}`)
+    : hasKv()
+      ? await kv.get(`stats:${username}`)
+      : null;
   return raw ? normalizeStats(raw) : null;
 }
 
 export async function getAllStats() {
+  if (hasLocalStore()) {
+    const keys = await localKeys("stats:");
+    const values = await Promise.all(
+      keys
+        .filter((key) => key !== LATEST_STATS_GENERATED_KEY)
+        .map((key) => localGet(key)),
+    );
+    return values.flatMap((value) => (value ? [normalizeStats(value)] : []));
+  }
+
   if (!hasKv()) return [];
 
   const keys: string[] = [];
@@ -366,6 +478,33 @@ export async function getAllStats() {
 }
 
 export async function getLatestStatsGenerated() {
+  if (hasLocalStore()) {
+    const cached = validTimestamp(await localGet(LATEST_STATS_GENERATED_KEY));
+    if (cached) return cached;
+
+    const keys = await localKeys("stats:");
+    const values = await Promise.all(
+      keys
+        .filter((key) => key !== LATEST_STATS_GENERATED_KEY)
+        .map((key) => localGet(key)),
+    );
+    let latest: string | null = null;
+    let latestTime = 0;
+
+    for (const value of values) {
+      const generated = validTimestamp(asRecord(value).generated);
+      if (!generated) continue;
+
+      const time = new Date(generated).getTime();
+      if (time <= latestTime) continue;
+
+      latest = generated;
+      latestTime = time;
+    }
+
+    return latest;
+  }
+
   if (!hasKv()) return null;
 
   const cached = validTimestamp(await kv.get(LATEST_STATS_GENERATED_KEY));
@@ -391,6 +530,9 @@ export async function getLatestStatsGenerated() {
 }
 
 export async function getCachedCommitStats(repoFullName: string, sha: string) {
+  if (hasLocalStore()) {
+    return asLineStats(await localGet(commitStatsKey(repoFullName, sha)));
+  }
   if (!hasKv()) return null;
   return asLineStats(await kv.get(commitStatsKey(repoFullName, sha)));
 }
@@ -400,6 +542,10 @@ export async function saveCachedCommitStats(
   sha: string,
   stats: RepoLineStats,
 ) {
+  if (hasLocalStore()) {
+    await localSet(commitStatsKey(repoFullName, sha), stats);
+    return;
+  }
   if (!hasKv()) return;
   await kv.set(commitStatsKey(repoFullName, sha), stats, {
     ex: COMMIT_STATS_TTL_SECONDS,
@@ -433,6 +579,25 @@ export async function saveCachedPrCount(
 }
 
 export async function getAllUsers() {
+  if (hasLocalStore()) {
+    const keys = await localKeys("user:");
+    const values = await Promise.all(
+      keys.map((key) => localGet<StoredUser>(key)),
+    );
+    return Promise.all(
+      values.flatMap((value) => {
+        if (!value) return [];
+        const { user, migrated } = decryptUserFromStorage(value);
+        return [
+          (async () => {
+            if (migrated) await saveUser(user);
+            return user;
+          })(),
+        ];
+      }),
+    );
+  }
+
   if (!hasKv()) return [];
 
   const keys: string[] = [];

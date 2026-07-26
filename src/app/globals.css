@@ -951,6 +951,201 @@ button {
   border-color: var(--border);
 }
 
+.share-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.share-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--background) 72%, transparent);
+  cursor: pointer;
+}
+
+.share-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(100%, 760px);
+  max-height: min(92vh, 840px);
+  flex-direction: column;
+  border: 1px solid var(--foreground);
+  background: var(--background);
+  box-shadow: 0 24px 80px
+    color-mix(in srgb, var(--foreground) 18%, transparent);
+}
+
+.share-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--foreground);
+  padding: 18px 20px;
+}
+
+.share-panel-head h2 {
+  margin: 0;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.share-close {
+  flex: 0 0 auto;
+}
+
+.share-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.share-card-option {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+  padding: 8px;
+  text-align: left;
+}
+
+.share-card-option:hover,
+.share-card-option.active {
+  border-color: var(--foreground);
+}
+
+.share-card-preview {
+  position: relative;
+  display: flex;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  background: var(--background);
+  overflow: hidden;
+}
+
+.share-card-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 160ms ease;
+}
+
+.share-card-preview img.is-loading {
+  opacity: 0;
+}
+
+.share-card-placeholder {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-family: var(--font-geist-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.share-card-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--foreground) 6%, var(--background)) 0,
+    color-mix(in srgb, var(--foreground) 6%, var(--background)) 10px,
+    var(--background) 10px,
+    var(--background) 20px
+  );
+}
+
+.share-card-loading span {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--foreground);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: share-spin 700ms linear infinite;
+}
+
+.share-card-option span {
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding: 16px 20px 20px;
+}
+
+.share-status {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+@keyframes share-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 700px) {
+  .share-layer {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .share-panel {
+    max-height: 88vh;
+  }
+
+  .share-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .share-card-option {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .share-card-preview {
+    width: 96px;
+  }
+
+  .share-status {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
 .site-footer {
   margin-top: auto;
   background: #000;
