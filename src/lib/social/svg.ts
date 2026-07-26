@@ -49,7 +49,12 @@ export function loadSvgFontCss() {
       font-synthesis: none;
       text-rendering: geometricPrecision;
     }`;
-  })();
+  })().catch((error) => {
+    // Without this a single failed read poisons the cache and every later card
+    // request on this instance replays the rejection.
+    fontCssPromise = null;
+    throw error;
+  });
 
   return fontCssPromise;
 }

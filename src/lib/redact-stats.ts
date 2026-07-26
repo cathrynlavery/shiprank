@@ -63,9 +63,16 @@ function remapRepos(repos: RepoStats, labels: Map<string, string>) {
   const out: RepoStats = {};
 
   for (const [name, repoStats] of Object.entries(repos)) {
-    const key =
-      repoStats.private === true ? (labels.get(name) ?? "private repo") : name;
-    out[key] = { ...repoStats };
+    // A repo flagged private in any period stays masked in every period. Buckets
+    // disagree after a repo flips visibility: today can say private while the
+    // retained total still says public, and that bucket would otherwise render
+    // the real owner/repo, with a working GitHub link next to it.
+    const label = labels.get(name);
+    if (!label) {
+      out[name] = { ...repoStats };
+      continue;
+    }
+    out[label] = { ...repoStats, private: true };
   }
 
   return out;
