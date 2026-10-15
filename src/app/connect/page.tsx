@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { auth } from "@/auth";
-import { githubAppInstallUrl } from "@/lib/github-app";
+import { githubConnectUrl } from "@/lib/github-app";
 
 export default async function ConnectPage() {
   const session = await auth();
-  const installUrl = githubAppInstallUrl();
-  const label = session?.githubUsername
-    ? "reconnect with github"
-    : "connect with github";
+  const isAuthenticated = Boolean(session?.githubUsername);
+  const connectUrl = githubConnectUrl(isAuthenticated);
+  const label = isAuthenticated ? "manage github access" : "connect with github";
 
   return (
     <main className="wrap">
@@ -30,7 +29,7 @@ export default async function ConnectPage() {
         repositories.
       </p>
       <div className="connect-actions connect-actions-primary">
-        <a className="button github-connect-button" href={installUrl}>
+        <a className="button github-connect-button" href={connectUrl}>
           {label}
         </a>
       </div>
@@ -91,7 +90,7 @@ export default async function ConnectPage() {
       </section>
 
       <div className="connect-actions">
-        <a className="button cta-button" href={installUrl}>
+        <a className="button cta-button" href={connectUrl}>
           {label}
         </a>
         <Link className="button button-secondary" href="/">
