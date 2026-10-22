@@ -283,6 +283,10 @@ button {
   line-height: 1.55;
 }
 
+.permission-notice p + p {
+  margin-top: 8px;
+}
+
 .permission-notice-action {
   display: flex;
   flex-wrap: wrap;
@@ -1201,4 +1205,18 @@ button {
   color: #888;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.private-names-notice {
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 14px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.private-names-notice a {
+  border-bottom: 1px solid var(--muted);
+  color: var(--foreground);
 }

@@ -10,12 +10,14 @@ export function StatsPage({
   stats,
   dayTotals,
   revealNames = false,
+  repoNotice,
   ownerTopControls,
   ownerBottomControls,
 }: {
   stats: StatsPayload;
   dayTotals: DayTotals;
   revealNames?: boolean;
+  repoNotice?: ReactNode;
   ownerTopControls?: ReactNode;
   ownerBottomControls?: ReactNode;
 }) {
@@ -60,6 +62,7 @@ export function StatsPage({
         stats={statsForTabs}
         dayTotals={dayTotals}
         revealNames={revealNames}
+        repoNotice={repoNotice}
       />
       {ownerBottomControls}
     </main>

@@ -1,6 +1,18 @@
 import { signInWithGithubFull } from "@/app/actions";
+import { STATS_TIME_ZONE } from "@/lib/stats-date";
 
 type OAuthState = "not-opted-in" | "opted-in" | "revoked";
+
+function shortDate(iso: string | undefined) {
+  return iso
+    ? new Date(iso).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: STATS_TIME_ZONE,
+      })
+    : null;
+}
 
 function FullVisibilityForm({
   children,
@@ -21,7 +33,11 @@ function FullVisibilityForm({
 
   return (
     <form action={signInWithGithubFull}>
-      <input name="redirectTo" type="hidden" value={`/${username}`} />
+      <input
+        name="redirectTo"
+        type="hidden"
+        value={`/${username}?reconnected=1`}
+      />
       <button className="button cta-button" type="submit">
         {children}
       </button>
@@ -32,12 +48,14 @@ function FullVisibilityForm({
 export function OAuthStateBanner({
   enabled,
   state,
+  grantedAt,
   revokedAt,
   settingsUrl,
   username,
 }: {
   enabled: boolean;
   state: OAuthState;
+  grantedAt?: string;
   revokedAt?: string;
   settingsUrl: string;
   username: string;
@@ -49,6 +67,12 @@ export function OAuthStateBanner({
         <p>
           Counts commits on default branches across repos you can read. GitHub
           search doesn&apos;t index feature-branch commits.
+        </p>
+        <p>
+          Connected{grantedAt ? ` ${shortDate(grantedAt)}` : ""}. Nothing to do
+          here. If you hit reconnect anyway, GitHub sends you straight back
+          without asking again, since you already approved ShipRank, and your
+          stats recount.
         </p>
         <div className="permission-notice-action">
           {enabled ? (
@@ -65,13 +89,7 @@ export function OAuthStateBanner({
   }
 
   if (state === "revoked") {
-    const date = revokedAt
-      ? new Date(revokedAt).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })
-      : "recently";
+    const date = shortDate(revokedAt) ?? "recently";
 
     return (
       <section className="permission-notice oauth-state-banner">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ActivityChart } from "@/components/activity-chart";
 import { CountUp } from "@/components/count-up";
 import { MetricStrip } from "@/components/metric-strip";
@@ -35,10 +35,12 @@ export function StatsTabs({
   stats,
   dayTotals,
   revealNames = false,
+  repoNotice,
 }: {
   stats: StatsTabsPayload;
   dayTotals: DayTotals;
   revealNames?: boolean;
+  repoNotice?: ReactNode;
 }) {
   const [activeKey, setActiveKey] = useState<PeriodKey>("today");
   const periods: Period[] = [
@@ -140,6 +142,7 @@ export function StatsTabs({
 
         <section className="section compact-section">
           <h2 className="section-head">{active.projectHead}</h2>
+          {repoNotice}
           <RepoList
             repos={active.summary.byRepo}
             limit={active.repoLimit}
