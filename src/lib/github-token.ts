@@ -264,3 +264,15 @@ export function classifyGitHubFailure(
   if (error.status >= 500) return "transient";
   return "unknown";
 }
+
+// Covers both the hourly quota and burst limits. They follow the GitHub user,
+// not the token: on 2026-10-22 the App-token retry after an OAuth secondary
+// limit failed on its first search page.
+export function isGitHubRateLimit(error: unknown) {
+  if (!(error instanceof GitHubApiError)) return false;
+  return (
+    error.status === 429 ||
+    classifyGitHubFailure(error) === "secondary-rate-limit" ||
+    (error.status === 403 && error.body.toLowerCase().includes("rate limit"))
+  );
+}

@@ -3,6 +3,7 @@ import {
   GitHubApiError,
   classifyGitHubFailure,
   getSearchToken,
+  isGitHubRateLimit,
   githubAppSlot,
   oauthSlot,
   refreshIfNeeded,
@@ -230,5 +231,37 @@ describe("classifyGitHubFailure", () => {
       "transient",
     );
     expect(classifyGitHubFailure(new Error("network"))).toBe("transient");
+  });
+});
+
+describe("isGitHubRateLimit", () => {
+  it("matches secondary, primary and 429 limits", () => {
+    expect(
+      isGitHubRateLimit(
+        new GitHubApiError(
+          "rate",
+          403,
+          '{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}',
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      isGitHubRateLimit(
+        new GitHubApiError("rate", 403, "API rate limit exceeded for user ID 1."),
+      ),
+    ).toBe(true);
+    expect(isGitHubRateLimit(new GitHubApiError("rate", 429, ""))).toBe(true);
+  });
+
+  it("ignores other failures", () => {
+    expect(
+      isGitHubRateLimit(
+        new GitHubApiError("sso", 403, "Resource not accessible by SAML"),
+      ),
+    ).toBe(false);
+    expect(isGitHubRateLimit(new GitHubApiError("oops", 502, "bad"))).toBe(
+      false,
+    );
+    expect(isGitHubRateLimit(new Error("rate limit"))).toBe(false);
   });
 });

@@ -26,6 +26,7 @@ import {
   getSearchToken,
   getUsableGitHubToken,
   GitHubApiError,
+  isGitHubRateLimit,
   type TokenSource,
 } from "@/lib/github-token";
 
@@ -151,7 +152,9 @@ async function getCommitStats(
     }
 
     return stats;
-  } catch {
+  } catch (error) {
+    // A rate-limited commit would otherwise be saved as 0 lines.
+    if (isGitHubRateLimit(error)) throw error;
     return { additions: 0, deletions: 0 };
   }
 }
@@ -304,7 +307,7 @@ async function runWithSearchToken(
       ...collected,
     };
   } catch (error) {
-    if (initial.source !== "oauth") throw error;
+    if (initial.source !== "oauth" || isGitHubRateLimit(error)) throw error;
 
     const classification = classifyGitHubFailure(error);
     logOauthFallback(user.username, classification, error);

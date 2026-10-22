@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { refreshUserStats } from "@/lib/github";
-import { getAllUsers, saveStats, saveUser } from "@/lib/store";
+import {
+  acquireRefreshLock,
+  getAllUsers,
+  releaseRefreshLock,
+  saveStats,
+  saveUser,
+} from "@/lib/store";
 import type { StoredUser } from "@/lib/types";
 
 export const maxDuration = 800;
@@ -15,6 +21,14 @@ type RefreshResult = {
 };
 
 async function refreshStoredUser(user: StoredUser): Promise<RefreshResult> {
+  if (!(await acquireRefreshLock(user.username))) {
+    return {
+      username: user.username,
+      ok: false,
+      error: "skipped: refresh already running",
+    };
+  }
+
   try {
     const { stats, user: updatedUser } = await refreshUserStats(user);
     if (updatedUser !== user) await saveUser(updatedUser);
@@ -26,6 +40,8 @@ async function refreshStoredUser(user: StoredUser): Promise<RefreshResult> {
       ok: false,
       error: error instanceof Error ? error.message : "unknown error",
     };
+  } finally {
+    await releaseRefreshLock(user.username);
   }
 }
 
