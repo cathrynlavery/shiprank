@@ -46,7 +46,11 @@ export function RepoList({
             <span className="repo-name">{label}</span>
           )}
           <span className={isPrivate ? "repo-scope private" : "repo-scope"}>
-            {isPrivate ? "private" : "public"}
+            {isPrivate
+              ? revealNames
+                ? "private · only you"
+                : "private"
+              : "public"}
           </span>
         </div>
         <span className="repo-lines">

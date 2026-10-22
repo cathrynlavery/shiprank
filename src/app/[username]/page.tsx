@@ -4,13 +4,17 @@ import { auth } from "@/auth";
 import { FirstRefresh } from "@/components/first-refresh";
 import { ManualRefreshButton } from "@/components/manual-refresh-button";
 import { OAuthStateBanner } from "@/components/oauth-state-banner";
+import { PrivateNamesNotice } from "@/components/private-names-notice";
 import { StatsPage } from "@/components/stats-page";
 import { repoLabelSecret } from "@/lib/crypto";
 import {
   githubFullSettingsUrl,
   signInWithGithubFullEnabled,
 } from "@/lib/oauth-config";
-import { redactPrivateRepoNames } from "@/lib/redact-stats";
+import {
+  collectPrivateRepoNames,
+  redactPrivateRepoNames,
+} from "@/lib/redact-stats";
 import { getStats, getUser } from "@/lib/store";
 import { dayAdditionTotals } from "@/lib/stats-totals";
 import { statsDate } from "@/lib/stats-date";
@@ -20,6 +24,10 @@ export const dynamic = "force-dynamic";
 type UserPageProps = {
   params: Promise<{
     username: string;
+  }>;
+  searchParams: Promise<{
+    view?: string;
+    reconnected?: string;
   }>;
 };
 
@@ -43,12 +51,20 @@ export async function generateMetadata({
   };
 }
 
-export default async function UserPage({ params }: UserPageProps) {
-  const { username } = await params;
+export default async function UserPage({
+  params,
+  searchParams,
+}: UserPageProps) {
+  const [{ username }, { view, reconnected }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const [rawStats, session] = await Promise.all([getStats(username), auth()]);
 
   if (rawStats) {
-    const isOwnProfile = session?.githubUsername === username;
+    const isOwner = session?.githubUsername === username;
+    // ?view=public renders the owner's page through the exact visitor path.
+    const isOwnProfile = isOwner && view !== "public";
     const stats = isOwnProfile
       ? rawStats
       : redactPrivateRepoNames(rawStats, repoLabelSecret());
@@ -66,12 +82,25 @@ export default async function UserPage({ params }: UserPageProps) {
         stats={stats}
         dayTotals={dayTotals}
         revealNames={isOwnProfile}
-        ownerTopControls={isOwnProfile ? <ManualRefreshButton /> : null}
+        repoNotice={
+          isOwner && collectPrivateRepoNames(rawStats).size > 0 ? (
+            <PrivateNamesNotice
+              username={username}
+              previewing={!isOwnProfile}
+            />
+          ) : null
+        }
+        ownerTopControls={
+          isOwnProfile ? (
+            <ManualRefreshButton autoStart={reconnected === "1"} />
+          ) : null
+        }
         ownerBottomControls={
           isOwnProfile ? (
             <OAuthStateBanner
               enabled={signInWithGithubFullEnabled()}
               state={oauthState}
+              grantedAt={user?.oauth?.grantedAt}
               revokedAt={user?.oauth?.revokedAt}
               settingsUrl={githubFullSettingsUrl()}
               username={username}

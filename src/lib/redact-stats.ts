@@ -4,7 +4,7 @@ import { wackyName } from "@/lib/wacky-name";
 
 type RepoLabelSecret = string | null | undefined;
 
-function collectPrivateRepoNames(stats: StatsPayload) {
+export function collectPrivateRepoNames(stats: StatsPayload) {
   const privateNames = new Set<string>();
   const collect = (repos: RepoStats) => {
     for (const [name, repoStats] of Object.entries(repos)) {
