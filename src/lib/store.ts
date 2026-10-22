@@ -529,6 +529,41 @@ export async function getLatestStatsGenerated() {
   return latest;
 }
 
+const REFRESH_LOCK_TTL_SECONDS = 300;
+
+function refreshLockKey(username: string) {
+  return `refresh-lock:${username}`;
+}
+
+// One refresh per user at a time: overlapping full rebuilds trip GitHub's
+// secondary rate limit. TTL matches the refresh route's maxDuration.
+export async function acquireRefreshLock(username: string) {
+  if (hasLocalStore()) {
+    const until = await localGet<number>(refreshLockKey(username));
+    if (until && until > Date.now()) return false;
+    await localSet(
+      refreshLockKey(username),
+      Date.now() + REFRESH_LOCK_TTL_SECONDS * 1000,
+    );
+    return true;
+  }
+  if (!hasKv()) return true;
+  const result = await kv.set(refreshLockKey(username), "1", {
+    nx: true,
+    ex: REFRESH_LOCK_TTL_SECONDS,
+  });
+  return result === "OK";
+}
+
+export async function releaseRefreshLock(username: string) {
+  if (hasLocalStore()) {
+    await localSet(refreshLockKey(username), 0);
+    return;
+  }
+  if (!hasKv()) return;
+  await kv.del(refreshLockKey(username));
+}
+
 export async function getCachedCommitStats(repoFullName: string, sha: string) {
   if (hasLocalStore()) {
     return asLineStats(await localGet(commitStatsKey(repoFullName, sha)));

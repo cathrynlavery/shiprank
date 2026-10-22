@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  acquireRefreshLock,
   getAllStats,
   getAllUsers,
   getStats,
@@ -10,6 +11,7 @@ import {
   isLocalStoreEnabled,
   mergeByDayStats,
   normalizeStats,
+  releaseRefreshLock,
   saveStats,
   saveUser,
 } from "@/lib/store";
@@ -389,5 +391,13 @@ describe("development local store", () => {
     const stored = JSON.parse(await readFile(storePath, "utf8"));
     expect(stored.values["user:ada"].token).not.toBe("github-token");
     expect(stored.values["stats:ada"].today.lines).toBe(10);
+  });
+
+  it("allows one refresh per user at a time", async () => {
+    await expect(acquireRefreshLock("ada")).resolves.toBe(true);
+    await expect(acquireRefreshLock("ada")).resolves.toBe(false);
+    await expect(acquireRefreshLock("bo")).resolves.toBe(true);
+    await releaseRefreshLock("ada");
+    await expect(acquireRefreshLock("ada")).resolves.toBe(true);
   });
 });

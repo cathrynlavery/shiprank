@@ -35,6 +35,8 @@ export function ManualRefreshButton({
   // something changed instead of the stats from before the grant.
   useEffect(() => {
     if (!autoStart) return;
+    // Reloading mid-recount must not start a second full rebuild.
+    window.history.replaceState(null, "", window.location.pathname);
     let cancelled = false;
     requestRefresh().then((error) => {
       if (cancelled) return;
