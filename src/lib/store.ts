@@ -23,6 +23,7 @@ type LocalStore = {
 let localWriteQueue = Promise.resolve();
 
 function hasKv() {
+  if (process.env.SHIPRANK_USE_LOCAL_STORE === "1") return false;
   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
 }
 

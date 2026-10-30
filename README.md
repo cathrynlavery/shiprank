@@ -92,7 +92,10 @@ https://your-deployment.vercel.app/api/auth/callback/github
 
 Vercel KV is optional in development. If `KV_REST_API_URL` and
 `KV_REST_API_TOKEN` are empty, `npm run dev` stores users, tokens, and stats in
-`.local-data/shiprank-store.json`. Delete that file to reset local state.
+`.local-data/shiprank-store.json`; with both KV variables set, it uses KV.
+`npm run preview` and `npm run start:local` always use the local store, even
+when KV credentials are present in `.env.local`, by setting
+`SHIPRANK_USE_LOCAL_STORE=1`. Delete the local store file to reset local state.
 
 ## Env
 
