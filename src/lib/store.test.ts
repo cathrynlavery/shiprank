@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { kv } from "@vercel/kv";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   acquireRefreshLock,
@@ -17,6 +18,10 @@ import {
 } from "@/lib/store";
 import { statsDate } from "@/lib/stats-date";
 import type { StatsPayload } from "@/lib/types";
+
+vi.mock("@vercel/kv", () => ({
+  kv: { get: vi.fn(), set: vi.fn() },
+}));
 
 function makePeriod(overrides: Partial<StatsPayload["today"]> = {}) {
   return {
@@ -349,7 +354,47 @@ describe("development local store", () => {
 
   afterEach(async () => {
     vi.unstubAllEnvs();
+    vi.resetAllMocks();
     await rm(dir, { recursive: true, force: true });
+  });
+
+  it("uses the local store when forced even with KV credentials", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("KV_REST_API_URL", "https://kv.example.test");
+    vi.stubEnv("KV_REST_API_TOKEN", "test-token");
+    expect(isLocalStoreEnabled()).toBe(true);
+
+    const user = {
+      username: "ada",
+      githubUserId: 123,
+      registeredAt: "2026-05-18T00:00:00.000Z",
+    };
+    await saveUser(user);
+    await expect(getUser("ada")).resolves.toMatchObject(user);
+    expect(JSON.parse(await readFile(storePath, "utf8")).values["user:ada"])
+      .toEqual(user);
+    expect(kv.set).not.toHaveBeenCalled();
+    expect(kv.get).not.toHaveBeenCalled();
+  });
+
+  it("uses KV with credentials when the local store flag is unset", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("SHIPRANK_USE_LOCAL_STORE", undefined);
+    vi.stubEnv("KV_REST_API_URL", "https://kv.example.test");
+    vi.stubEnv("KV_REST_API_TOKEN", "test-token");
+    expect(isLocalStoreEnabled()).toBe(false);
+
+    const user = {
+      username: "ada",
+      githubUserId: 123,
+      registeredAt: "2026-05-18T00:00:00.000Z",
+    };
+    vi.mocked(kv.get).mockResolvedValue(user);
+    await saveUser(user);
+    await expect(getUser("ada")).resolves.toMatchObject(user);
+    expect(kv.set).toHaveBeenCalledExactlyOnceWith("user:ada", user);
+    expect(kv.get).toHaveBeenCalledExactlyOnceWith("user:ada");
+    await expect(readFile(storePath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("persists users and stats without Vercel KV", async () => {
