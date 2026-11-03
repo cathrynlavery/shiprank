@@ -1,3 +1,4 @@
+import * as database from "@/lib/neon-store";
 import { kv } from "@vercel/kv";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -22,14 +23,38 @@ type LocalStore = {
 };
 let localWriteQueue = Promise.resolve();
 
-function hasKv() {
+function hasRemoteStore() {
   if (process.env.SHIPRANK_USE_LOCAL_STORE === "1") return false;
-  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  return Boolean(process.env.SHIPRANK_STORAGE_BACKEND || process.env.DATABASE_URL ||
+    process.env.KV_REST_API_URL || process.env.KV_REST_API_TOKEN);
+}
+
+function storageBackend() {
+  const backend = process.env.SHIPRANK_STORAGE_BACKEND;
+  if (backend === "neon") {
+    if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for Neon storage");
+    return backend;
+  }
+  if (backend === "redis") {
+    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+      throw new Error("Redis storage requires both KV REST credentials");
+    }
+    return backend;
+  }
+  throw new Error("SHIPRANK_STORAGE_BACKEND must explicitly select redis or neon");
+}
+
+export function isStorageReadOnly() {
+  return process.env.SHIPRANK_STORAGE_READ_ONLY === "1";
+}
+
+function requireWritableStorage() {
+  if (isStorageReadOnly()) throw new Error("Storage is read-only during migration; try again later");
 }
 
 function hasLocalStore() {
   return (
-    !hasKv() &&
+    !hasRemoteStore() &&
     (process.env.NODE_ENV === "development" ||
       process.env.SHIPRANK_USE_LOCAL_STORE === "1")
   );
@@ -90,6 +115,34 @@ async function localGet<T>(key: string): Promise<T | null> {
   await waitForLocalWrites();
   const store = await readLocalStore();
   return (store.values[key] as T | undefined) ?? null;
+}
+
+async function getValue<T>(key: string): Promise<T | null> {
+  if (hasLocalStore()) return localGet<T>(key);
+  return storageBackend() === "redis" ? kv.get<T>(key) : database.getValue<T>(key);
+}
+
+async function setValue(key: string, value: unknown, ttlSeconds?: number) {
+  requireWritableStorage();
+  if (hasLocalStore()) return localSet(key, value);
+  if (storageBackend() === "redis") {
+    if (ttlSeconds === undefined) await kv.set(key, value);
+    else await kv.set(key, value, { ex: ttlSeconds });
+    return;
+  }
+  return database.setValue(key, value, ttlSeconds);
+}
+
+async function listValues<T>(prefix: string): Promise<T[]> {
+  if (!hasLocalStore()) {
+    if (storageBackend() === "neon") return database.listValues<T>(prefix);
+    const keys = new Set<string>();
+    for await (const key of kv.scanIterator({ match: `${prefix}*`, count: 100 })) keys.add(key);
+    const values = await Promise.all([...keys].map((key) => kv.get<T>(key)));
+    return values.flatMap((value) => value === null ? [] : [value as T]);
+  }
+  const values = await Promise.all((await localKeys(prefix)).map((key) => localGet<T>(key)));
+  return values.flatMap((value) => value === null ? [] : [value as T]);
 }
 
 async function localSet(key: string, value: unknown) {
@@ -196,20 +249,22 @@ function tokenFields(user: StoredUser) {
 }
 
 async function auditTokenRead(user: StoredUser, fields: string[]) {
-  if (!fields.length || !hasKv()) return;
+  if (!fields.length || hasLocalStore() || isStorageReadOnly()) return;
   const date = new Date().toISOString().slice(0, 10);
   const key = `audit:token-reads:${date}`;
 
   try {
-    await kv.lpush(
+    const entry = JSON.stringify({ username: user.username, fields, readAt: new Date().toISOString() });
+    if (storageBackend() === "redis") {
+      await kv.lpush(key, entry);
+      await kv.expire(key, TOKEN_AUDIT_TTL_SECONDS);
+      return;
+    }
+    await database.appendAudit(
       key,
-      JSON.stringify({
-        username: user.username,
-        fields,
-        readAt: new Date().toISOString(),
-      }),
+      entry,
+      TOKEN_AUDIT_TTL_SECONDS,
     );
-    await kv.expire(key, TOKEN_AUDIT_TTL_SECONDS);
   } catch (error) {
     console.warn("Token read audit failed", error);
   }
@@ -408,115 +463,47 @@ export function normalizeStats(raw: unknown, now = new Date()): StatsPayload {
 }
 
 export async function saveUser(user: StoredUser) {
-  if (hasLocalStore()) {
-    await localSet(`user:${user.username}`, encryptUserForStorage(user));
-    return;
-  }
-  if (!hasKv()) return;
-  await kv.set(`user:${user.username}`, encryptUserForStorage(user));
+  requireWritableStorage();
+  await setValue(`user:${user.username}`, encryptUserForStorage(user));
 }
 
 export async function getUser(username: string) {
-  const raw = hasLocalStore()
-    ? await localGet<StoredUser>(`user:${username}`)
-    : hasKv()
-      ? await kv.get<StoredUser>(`user:${username}`)
-      : null;
+  const raw = await getValue<StoredUser>(`user:${username}`);
   if (!raw) return null;
 
   const { user, migrated } = decryptUserFromStorage(raw);
   await auditTokenRead(user, tokenFields(user));
-  if (migrated) await saveUser(user);
+  if (migrated && !isStorageReadOnly()) await saveUser(user);
   return user;
 }
 
 export async function saveStats(stats: StatsPayload) {
-  if (hasLocalStore()) {
-    await Promise.all([
-      localSet(`stats:${stats.username}`, stats),
-      localSet(LATEST_STATS_GENERATED_KEY, new Date().toISOString()),
-    ]);
-    return;
-  }
-  if (!hasKv()) return;
   await Promise.all([
-    kv.set(`stats:${stats.username}`, stats),
-    kv.set(LATEST_STATS_GENERATED_KEY, new Date().toISOString()),
+    setValue(`stats:${stats.username}`, stats),
+    setValue(LATEST_STATS_GENERATED_KEY, new Date().toISOString()),
   ]);
 }
 
 export async function getStats(username: string) {
-  const raw = hasLocalStore()
-    ? await localGet(`stats:${username}`)
-    : hasKv()
-      ? await kv.get(`stats:${username}`)
-      : null;
+  const raw = await getValue(`stats:${username}`);
   return raw ? normalizeStats(raw) : null;
 }
 
 export async function getAllStats() {
-  if (hasLocalStore()) {
-    const keys = await localKeys("stats:");
-    const values = await Promise.all(
-      keys
-        .filter((key) => key !== LATEST_STATS_GENERATED_KEY)
-        .map((key) => localGet(key)),
-    );
-    return values.flatMap((value) => (value ? [normalizeStats(value)] : []));
-  }
-
-  if (!hasKv()) return [];
-
-  const keys: string[] = [];
-
-  for await (const key of kv.scanIterator({ match: "stats:*", count: 100 })) {
-    if (key === LATEST_STATS_GENERATED_KEY) continue;
-    keys.push(key);
-  }
-
-  const values = await Promise.all(keys.map((key) => kv.get(key)));
-  return values.flatMap((value) => (value ? [normalizeStats(value)] : []));
+  const values = await listValues("stats:");
+  return values.filter((value) => typeof value === "object" && value !== null)
+    .map((value) => normalizeStats(value));
 }
 
 export async function getLatestStatsGenerated() {
-  if (hasLocalStore()) {
-    const cached = validTimestamp(await localGet(LATEST_STATS_GENERATED_KEY));
-    if (cached) return cached;
-
-    const keys = await localKeys("stats:");
-    const values = await Promise.all(
-      keys
-        .filter((key) => key !== LATEST_STATS_GENERATED_KEY)
-        .map((key) => localGet(key)),
-    );
-    let latest: string | null = null;
-    let latestTime = 0;
-
-    for (const value of values) {
-      const generated = validTimestamp(asRecord(value).generated);
-      if (!generated) continue;
-
-      const time = new Date(generated).getTime();
-      if (time <= latestTime) continue;
-
-      latest = generated;
-      latestTime = time;
-    }
-
-    return latest;
-  }
-
-  if (!hasKv()) return null;
-
-  const cached = validTimestamp(await kv.get(LATEST_STATS_GENERATED_KEY));
+  const cached = validTimestamp(await getValue(LATEST_STATS_GENERATED_KEY));
   if (cached) return cached;
 
   let latest: string | null = null;
   let latestTime = 0;
 
-  for await (const key of kv.scanIterator({ match: "stats:*", count: 100 })) {
-    if (key === LATEST_STATS_GENERATED_KEY) continue;
-    const value = asRecord(await kv.get(key));
+  for (const raw of await listValues("stats:")) {
+    const value = asRecord(raw);
     const generated = validTimestamp(value.generated);
     if (!generated) continue;
 
@@ -539,6 +526,7 @@ function refreshLockKey(username: string) {
 // One refresh per user at a time: overlapping full rebuilds trip GitHub's
 // secondary rate limit. TTL matches the refresh route's maxDuration.
 export async function acquireRefreshLock(username: string) {
+  if (isStorageReadOnly()) return false;
   if (hasLocalStore()) {
     const until = await localGet<number>(refreshLockKey(username));
     if (until && until > Date.now()) return false;
@@ -548,29 +536,24 @@ export async function acquireRefreshLock(username: string) {
     );
     return true;
   }
-  if (!hasKv()) return true;
-  const result = await kv.set(refreshLockKey(username), "1", {
-    nx: true,
-    ex: REFRESH_LOCK_TTL_SECONDS,
-  });
-  return result === "OK";
+  if (storageBackend() === "redis") {
+    return (await kv.set(refreshLockKey(username), "1", { nx: true, ex: REFRESH_LOCK_TTL_SECONDS })) === "OK";
+  }
+  return database.acquireLock(refreshLockKey(username), REFRESH_LOCK_TTL_SECONDS);
 }
 
 export async function releaseRefreshLock(username: string) {
+  if (isStorageReadOnly()) return;
   if (hasLocalStore()) {
     await localSet(refreshLockKey(username), 0);
     return;
   }
-  if (!hasKv()) return;
-  await kv.del(refreshLockKey(username));
+  if (storageBackend() === "redis") await kv.del(refreshLockKey(username));
+  else await database.releaseLock(refreshLockKey(username));
 }
 
 export async function getCachedCommitStats(repoFullName: string, sha: string) {
-  if (hasLocalStore()) {
-    return asLineStats(await localGet(commitStatsKey(repoFullName, sha)));
-  }
-  if (!hasKv()) return null;
-  return asLineStats(await kv.get(commitStatsKey(repoFullName, sha)));
+  return asLineStats(await getValue(commitStatsKey(repoFullName, sha)));
 }
 
 export async function saveCachedCommitStats(
@@ -578,14 +561,7 @@ export async function saveCachedCommitStats(
   sha: string,
   stats: RepoLineStats,
 ) {
-  if (hasLocalStore()) {
-    await localSet(commitStatsKey(repoFullName, sha), stats);
-    return;
-  }
-  if (!hasKv()) return;
-  await kv.set(commitStatsKey(repoFullName, sha), stats, {
-    ex: COMMIT_STATS_TTL_SECONDS,
-  });
+  await setValue(commitStatsKey(repoFullName, sha), stats, COMMIT_STATS_TTL_SECONDS);
 }
 
 export async function getCachedPrCount(
@@ -593,9 +569,9 @@ export async function getCachedPrCount(
   tokenSource: string,
   query: string,
 ) {
-  if (!hasKv()) return null;
+  if (hasLocalStore()) return null;
   const count = asNumber(
-    await kv.get(prCountKey(username, tokenSource, query)),
+    await getValue(prCountKey(username, tokenSource, query)),
     -1,
   );
   return count >= 0 ? count : null;
@@ -608,41 +584,13 @@ export async function saveCachedPrCount(
   count: number,
   ttlSeconds: number,
 ) {
-  if (!hasKv()) return;
-  await kv.set(prCountKey(username, tokenSource, query), count, {
-    ex: ttlSeconds,
-  });
+  requireWritableStorage();
+  if (hasLocalStore()) return;
+  await setValue(prCountKey(username, tokenSource, query), count, ttlSeconds);
 }
 
 export async function getAllUsers() {
-  if (hasLocalStore()) {
-    const keys = await localKeys("user:");
-    const values = await Promise.all(
-      keys.map((key) => localGet<StoredUser>(key)),
-    );
-    return Promise.all(
-      values.flatMap((value) => {
-        if (!value) return [];
-        const { user, migrated } = decryptUserFromStorage(value);
-        return [
-          (async () => {
-            if (migrated) await saveUser(user);
-            return user;
-          })(),
-        ];
-      }),
-    );
-  }
-
-  if (!hasKv()) return [];
-
-  const keys: string[] = [];
-
-  for await (const key of kv.scanIterator({ match: "user:*", count: 100 })) {
-    keys.push(key);
-  }
-
-  const values = await Promise.all(keys.map((key) => kv.get<StoredUser>(key)));
+  const values = await listValues<StoredUser>("user:");
   const users = await Promise.all(
     values.flatMap((value) => {
       if (!value) return [];
@@ -650,7 +598,7 @@ export async function getAllUsers() {
       return [
         (async () => {
           await auditTokenRead(user, tokenFields(user));
-          if (migrated) await saveUser(user);
+          if (migrated && !isStorageReadOnly()) await saveUser(user);
           return user;
         })(),
       ];
@@ -658,6 +606,10 @@ export async function getAllUsers() {
   );
 
   return users;
+}
+
+export async function purgeExpiredStorage() {
+  if (!hasLocalStore() && !isStorageReadOnly() && storageBackend() === "neon") await database.purgeExpired();
 }
 
 export function mergeByDayStats({

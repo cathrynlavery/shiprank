@@ -4,6 +4,7 @@ import { refreshUserStats } from "@/lib/github";
 import {
   acquireRefreshLock,
   getAllUsers,
+  purgeExpiredStorage,
   releaseRefreshLock,
   saveStats,
   saveUser,
@@ -53,6 +54,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  await purgeExpiredStorage();
   const users = await getAllUsers();
   const results = await mapWithConcurrency(
     users,

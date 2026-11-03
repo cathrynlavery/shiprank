@@ -28,12 +28,14 @@ type AuthConfig = {
 };
 
 const storeState = vi.hoisted(() => ({
+  readOnly: false,
   existing: null as StoredUser | null,
   saved: [] as StoredUser[],
   config: null as AuthConfig | null,
 }));
 
 vi.mock("@/lib/store", () => ({
+  isStorageReadOnly: vi.fn(() => storeState.readOnly),
   getUser: vi.fn(async () => storeState.existing),
   saveUser: vi.fn(async (user: StoredUser) => {
     storeState.saved.push(user);
@@ -86,6 +88,16 @@ describe("auth signIn merge", () => {
     vi.stubEnv("AUTH_GITHUB_FULL_SECRET", "full-secret");
     storeState.existing = null;
     storeState.saved = [];
+    storeState.readOnly = false;
+  });
+
+  it("declines OAuth sign-in while migration writes are paused", async () => {
+    storeState.readOnly = true;
+    const config = await loadConfig();
+    await expect(config.callbacks.signIn({
+      account: account("github"), profile: { login: "ada", id: 123 }, user: {},
+    })).resolves.toBe(false);
+    expect(storeState.saved).toEqual([]);
   });
 
   it("preserves oauth when the GitHub App provider re-signs in", async () => {
