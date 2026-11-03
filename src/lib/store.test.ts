@@ -1,7 +1,6 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { kv } from "@vercel/kv";
 import * as database from "@/lib/neon-store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -22,10 +21,6 @@ import {
 } from "@/lib/store";
 import { statsDate } from "@/lib/stats-date";
 import type { StatsPayload } from "@/lib/types";
-
-vi.mock("@vercel/kv", () => ({
-  kv: { get: vi.fn(), set: vi.fn(), scanIterator: vi.fn(), lpush: vi.fn(), expire: vi.fn(), del: vi.fn() },
-}));
 
 vi.mock("@/lib/neon-store", () => ({
   getValue: vi.fn(), setValue: vi.fn(), listValues: vi.fn(), appendAudit: vi.fn(),
@@ -357,8 +352,7 @@ describe("development local store", () => {
     vi.stubEnv("SHIPRANK_LOCAL_STORE_DIR", dir);
     vi.stubEnv("SHIPRANK_USE_LOCAL_STORE", "1");
     vi.stubEnv("TOKEN_ENCRYPTION_KEY", "12345678901234567890123456789012");
-    vi.stubEnv("KV_REST_API_URL", "");
-    vi.stubEnv("KV_REST_API_TOKEN", "");
+    vi.stubEnv("DATABASE_URL", "");
   });
 
   afterEach(async () => {
@@ -367,10 +361,9 @@ describe("development local store", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("uses the local store when forced even with KV credentials", async () => {
+  it("uses the local store when forced even with a database URL", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("KV_REST_API_URL", "https://kv.example.test");
-    vi.stubEnv("KV_REST_API_TOKEN", "test-token");
+    vi.stubEnv("DATABASE_URL", "postgres://test:test@db.example.test/shiprank");
     expect(isLocalStoreEnabled()).toBe(true);
 
     const user = {
@@ -382,32 +375,27 @@ describe("development local store", () => {
     await expect(getUser("ada")).resolves.toMatchObject(user);
     expect(JSON.parse(await readFile(storePath, "utf8")).values["user:ada"])
       .toEqual(user);
-    expect(kv.set).not.toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
+    expect(database.setValue).not.toHaveBeenCalled();
+    expect(database.getValue).not.toHaveBeenCalled();
   });
 
-  it("uses KV with credentials when the local store flag is unset", async () => {
+  it("uses the local store automatically in development without a database URL", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("SHIPRANK_USE_LOCAL_STORE", undefined);
-    vi.stubEnv("SHIPRANK_STORAGE_BACKEND", "redis");
-    vi.stubEnv("KV_REST_API_URL", "https://kv.example.test");
-    vi.stubEnv("KV_REST_API_TOKEN", "test-token");
-    expect(isLocalStoreEnabled()).toBe(false);
+    expect(isLocalStoreEnabled()).toBe(true);
 
     const user = {
       username: "ada",
       githubUserId: 123,
       registeredAt: "2026-05-18T00:00:00.000Z",
     };
-    vi.mocked(kv.get).mockResolvedValue(user);
     await saveUser(user);
     await expect(getUser("ada")).resolves.toMatchObject(user);
-    expect(kv.set).toHaveBeenCalledExactlyOnceWith("user:ada", user);
-    expect(kv.get).toHaveBeenCalledExactlyOnceWith("user:ada");
-    await expect(readFile(storePath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect(JSON.parse(await readFile(storePath, "utf8")).values["user:ada"]).toEqual(user);
+    expect(database.setValue).not.toHaveBeenCalled();
   });
 
-  it("persists users and stats without Vercel KV", async () => {
+  it("persists users and stats without a remote database", async () => {
     expect(isLocalStoreEnabled()).toBe(true);
 
     await saveUser({
@@ -456,21 +444,16 @@ describe("development local store", () => {
     await expect(acquireRefreshLock("ada")).resolves.toBe(true);
   });
 
-  it("requires explicit production backend selection instead of falling back", async () => {
+  it("never enables local storage automatically in production", () => {
     vi.stubEnv("SHIPRANK_USE_LOCAL_STORE", undefined);
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("SHIPRANK_STORAGE_BACKEND", undefined);
-    await expect(getUser("ada")).rejects.toThrow("explicitly select");
-    expect(database.getValue).not.toHaveBeenCalled();
-    expect(kv.get).not.toHaveBeenCalled();
+    expect(isLocalStoreEnabled()).toBe(false);
   });
 
-  it("uses Neon exclusively when selected even if old KV credentials remain", async () => {
+  it("uses Neon in production with only a database URL", async () => {
     vi.stubEnv("SHIPRANK_USE_LOCAL_STORE", undefined);
-    vi.stubEnv("SHIPRANK_STORAGE_BACKEND", "neon");
+    vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("DATABASE_URL", "postgres://test:test@db.example.test/shiprank");
-    vi.stubEnv("KV_REST_API_URL", "https://kv.example.test");
-    vi.stubEnv("KV_REST_API_TOKEN", "test-token");
     const user = { username: "ada", registeredAt: "2026-05-18T00:00:00Z", token: "example-token" };
     await saveUser(user);
     const persisted = vi.mocked(database.setValue).mock.calls[0][1] as typeof user;
@@ -479,8 +462,6 @@ describe("development local store", () => {
     vi.mocked(database.getValue).mockResolvedValue(persisted);
     await expect(getUser("ada")).resolves.toMatchObject(user);
     expect(database.appendAudit).toHaveBeenCalledOnce();
-    expect(kv.get).not.toHaveBeenCalled();
-    expect(kv.set).not.toHaveBeenCalled();
   });
 
   it("freezes all storage mutations while keeping existing reads available", async () => {
@@ -497,6 +478,20 @@ describe("development local store", () => {
     await releaseRefreshLock("ada");
     expect(await readFile(storePath, "utf8")).toBe(before);
     expect(database.appendAudit).not.toHaveBeenCalled();
-    expect(kv.set).not.toHaveBeenCalled();
+    expect(database.setValue).not.toHaveBeenCalled();
+  });
+
+  it("keeps Neon token reads free of audit writes and lazy rewrites during maintenance", async () => {
+    vi.stubEnv("SHIPRANK_USE_LOCAL_STORE", undefined);
+    vi.stubEnv("DATABASE_URL", "postgres://test:test@db.example.test/shiprank");
+    vi.stubEnv("SHIPRANK_STORAGE_READ_ONLY", "1");
+    vi.mocked(database.getValue).mockResolvedValue({ username: "ada", token: "legacy-fixture" });
+    await expect(getUser("ada")).resolves.toMatchObject({ token: "legacy-fixture" });
+    await expect(acquireRefreshLock("ada")).resolves.toBe(false);
+    await releaseRefreshLock("ada");
+    expect(database.appendAudit).not.toHaveBeenCalled();
+    expect(database.setValue).not.toHaveBeenCalled();
+    expect(database.acquireLock).not.toHaveBeenCalled();
+    expect(database.releaseLock).not.toHaveBeenCalled();
   });
 });
