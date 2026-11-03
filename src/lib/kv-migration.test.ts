@@ -34,7 +34,7 @@ describe("Redis migration snapshot", () => {
       if (cmd[0] === "SCAN") return ["0", ["user:ada"]];
       return [["100", "0"], "string", -1, JSON.stringify({ username: "ada", oauth: { accessToken: "plaintext" } })];
     });
-    await expect(sourceSnapshot(command)).rejects.toThrow("source token encryption");
+    await expect(sourceSnapshot(command)).rejects.toThrow("token encryption");
   });
 
   it("fails closed for active refresh locks and unexpected data types", async () => {

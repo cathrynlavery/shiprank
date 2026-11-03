@@ -25,7 +25,7 @@ function canonicalValue(key, value) {
   return key.startsWith("user:")
     ? userTokens(value, (token) => {
       if (typeof token !== "string" || !/^enc:v1:[A-Za-z0-9_-]+$/.test(token) || Buffer.from(token.slice(7), "base64url").length < 28) {
-        throw new Error("Invalid source token encryption; repair source before migrating");
+        throw new Error("Invalid token encryption in migration data; repair the affected store before migrating");
       }
       return token;
     })
@@ -110,6 +110,25 @@ export function sameRows(expected, actual, now = Date.now()) {
   });
 }
 
+export async function writeRows(sql, source, existing) {
+  for (const [key, row] of existing) {
+    if (!source.has(key) || !sameRows(new Map([[key, source.get(key)]]), new Map([[key, row]]))) {
+      throw new Error("Destination contains conflicting data; nothing was overwritten");
+    }
+  }
+  const entries = [...source].map(([key, row]) => ({ key, value: row.value,
+    expires_at: row.expiresAt === null ? null : new Date(row.expiresAt).toISOString() }));
+  for (let i = 0; i < entries.length; i += 100) {
+    await sql`
+      INSERT INTO shiprank_entries (key, value, expires_at)
+      SELECT key, value, expires_at FROM jsonb_to_recordset(${JSON.stringify(entries.slice(i, i + 100))}::jsonb)
+        AS imported(key text, value jsonb, expires_at timestamptz)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, expires_at = EXCLUDED.expires_at
+        WHERE shiprank_entries.expires_at <= now()
+    `;
+  }
+}
+
 async function main() {
   const flags = process.argv.slice(2);
   if (flags.some((flag) => !["--write", "--verify"].includes(flag)) || (flags.includes("--write") && flags.includes("--verify"))) {
@@ -152,25 +171,7 @@ async function main() {
     const rows = await sql`SELECT key, value, expires_at FROM shiprank_entries WHERE expires_at IS NULL OR expires_at > now()`;
     return new Map(rows.map((row) => [row.key, { value: row.value, expiresAt: row.expires_at === null ? null : new Date(row.expires_at).getTime() }]));
   };
-  if (write) {
-    const existing = await destination();
-    for (const [key, row] of existing) {
-      if (!source.has(key) || !sameRows(new Map([[key, source.get(key)]]), new Map([[key, row]]))) {
-        throw new Error("Destination contains conflicting data; nothing was overwritten");
-      }
-    }
-    const entries = [...source].map(([key, row]) => ({ key, value: row.value,
-      expires_at: row.expiresAt === null ? null : new Date(row.expiresAt).toISOString() }));
-    for (let i = 0; i < entries.length; i += 100) {
-      await sql`
-        INSERT INTO shiprank_entries (key, value, expires_at)
-        SELECT key, value, expires_at FROM jsonb_to_recordset(${JSON.stringify(entries.slice(i, i + 100))}::jsonb)
-          AS imported(key text, value jsonb, expires_at timestamptz)
-        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, expires_at = EXCLUDED.expires_at
-          WHERE shiprank_entries.expires_at <= now()
-      `;
-    }
-  }
+  if (write) await writeRows(sql, source, await destination());
   const sourceAfter = await sourceSnapshot(command);
   if (!sameRows(source, sourceAfter)) throw new Error("Source changed during migration; keep source active and retry after pausing writes");
   if ((write || verify) && !sameRows(sourceAfter, await destination())) {

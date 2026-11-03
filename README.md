@@ -93,6 +93,7 @@ https://your-deployment.vercel.app/api/auth/callback/github
 Remote storage is optional in development. Without remote configuration,
 `npm run dev` stores users, tokens, and stats in `.local-data/shiprank-store.json`.
 To use Neon, set `SHIPRANK_STORAGE_BACKEND=neon` and `DATABASE_URL`.
+Existing local KV credentials also require `SHIPRANK_STORAGE_BACKEND=redis`.
 `npm run preview` and `npm run start:local` always use the local store, even
 when KV credentials are present in `.env.local`, by setting
 `SHIPRANK_USE_LOCAL_STORE=1`. Delete the local store file to reset local state.

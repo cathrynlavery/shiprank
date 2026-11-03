@@ -16,7 +16,8 @@ fields instead of copying them into Neon.
 - `SHIPRANK_STORAGE_READ_ONLY=1` pauses all application storage writes. Public
   stats reads continue. OAuth sign-in is declined, refresh lock acquisition
   returns false, and saves fail with a read-only error. Audit appends, lazy token
-  rewrites, lock releases and expiration cleanup also stop.
+  rewrites, lock releases and expiration cleanup also stop. Manual refresh
+  requests return HTTP 503 with a maintenance message.
 - Local development without remote storage configuration still uses the local
   file. `SHIPRANK_USE_LOCAL_STORE=1` forces it, including local previews.
 
@@ -72,6 +73,10 @@ SQL/lock behavior, supply an isolated Neon test branch as
 `npx vitest run src/lib/neon-store.integration.test.ts`. This test creates the
 table and cleans its own rows; its expiration test also purges expired rows, so
 never point it at production.
+
+Run `src/lib/kv-migration.integration.test.ts` against a separate empty test
+database to exercise partial-copy reruns, live-row conflict refusal and expired
+row replacement using the importer's actual SQL write path.
 
 Live import, deployment and user-flow checks are still required; unit tests do
 not establish that the migration has happened.
