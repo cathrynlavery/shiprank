@@ -1,5 +1,4 @@
 import * as database from "@/lib/neon-store";
-import { kv } from "@vercel/kv";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { decryptToken, encryptToken, isEncryptedToken } from "@/lib/crypto";
@@ -23,27 +22,6 @@ type LocalStore = {
 };
 let localWriteQueue = Promise.resolve();
 
-function hasRemoteStore() {
-  if (process.env.SHIPRANK_USE_LOCAL_STORE === "1") return false;
-  return Boolean(process.env.SHIPRANK_STORAGE_BACKEND || process.env.DATABASE_URL ||
-    process.env.KV_REST_API_URL || process.env.KV_REST_API_TOKEN);
-}
-
-function storageBackend() {
-  const backend = process.env.SHIPRANK_STORAGE_BACKEND;
-  if (backend === "neon") {
-    if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for Neon storage");
-    return backend;
-  }
-  if (backend === "redis") {
-    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-      throw new Error("Redis storage requires both KV REST credentials");
-    }
-    return backend;
-  }
-  throw new Error("SHIPRANK_STORAGE_BACKEND must explicitly select redis or neon");
-}
-
 export function isStorageReadOnly() {
   return process.env.SHIPRANK_STORAGE_READ_ONLY === "1";
 }
@@ -54,9 +32,8 @@ function requireWritableStorage() {
 
 function hasLocalStore() {
   return (
-    !hasRemoteStore() &&
-    (process.env.NODE_ENV === "development" ||
-      process.env.SHIPRANK_USE_LOCAL_STORE === "1")
+    process.env.SHIPRANK_USE_LOCAL_STORE === "1" ||
+    (!process.env.DATABASE_URL && process.env.NODE_ENV === "development")
   );
 }
 
@@ -119,28 +96,17 @@ async function localGet<T>(key: string): Promise<T | null> {
 
 async function getValue<T>(key: string): Promise<T | null> {
   if (hasLocalStore()) return localGet<T>(key);
-  return storageBackend() === "redis" ? kv.get<T>(key) : database.getValue<T>(key);
+  return database.getValue<T>(key);
 }
 
 async function setValue(key: string, value: unknown, ttlSeconds?: number) {
   requireWritableStorage();
   if (hasLocalStore()) return localSet(key, value);
-  if (storageBackend() === "redis") {
-    if (ttlSeconds === undefined) await kv.set(key, value);
-    else await kv.set(key, value, { ex: ttlSeconds });
-    return;
-  }
   return database.setValue(key, value, ttlSeconds);
 }
 
 async function listValues<T>(prefix: string): Promise<T[]> {
-  if (!hasLocalStore()) {
-    if (storageBackend() === "neon") return database.listValues<T>(prefix);
-    const keys = new Set<string>();
-    for await (const key of kv.scanIterator({ match: `${prefix}*`, count: 100 })) keys.add(key);
-    const values = await Promise.all([...keys].map((key) => kv.get<T>(key)));
-    return values.flatMap((value) => value === null ? [] : [value as T]);
-  }
+  if (!hasLocalStore()) return database.listValues<T>(prefix);
   const values = await Promise.all((await localKeys(prefix)).map((key) => localGet<T>(key)));
   return values.flatMap((value) => value === null ? [] : [value as T]);
 }
@@ -255,11 +221,6 @@ async function auditTokenRead(user: StoredUser, fields: string[]) {
 
   try {
     const entry = JSON.stringify({ username: user.username, fields, readAt: new Date().toISOString() });
-    if (storageBackend() === "redis") {
-      await kv.lpush(key, entry);
-      await kv.expire(key, TOKEN_AUDIT_TTL_SECONDS);
-      return;
-    }
     await database.appendAudit(
       key,
       entry,
@@ -536,9 +497,6 @@ export async function acquireRefreshLock(username: string) {
     );
     return true;
   }
-  if (storageBackend() === "redis") {
-    return (await kv.set(refreshLockKey(username), "1", { nx: true, ex: REFRESH_LOCK_TTL_SECONDS })) === "OK";
-  }
   return database.acquireLock(refreshLockKey(username), REFRESH_LOCK_TTL_SECONDS);
 }
 
@@ -548,8 +506,7 @@ export async function releaseRefreshLock(username: string) {
     await localSet(refreshLockKey(username), 0);
     return;
   }
-  if (storageBackend() === "redis") await kv.del(refreshLockKey(username));
-  else await database.releaseLock(refreshLockKey(username));
+  await database.releaseLock(refreshLockKey(username));
 }
 
 export async function getCachedCommitStats(repoFullName: string, sha: string) {
@@ -609,7 +566,7 @@ export async function getAllUsers() {
 }
 
 export async function purgeExpiredStorage() {
-  if (!hasLocalStore() && !isStorageReadOnly() && storageBackend() === "neon") await database.purgeExpired();
+  if (!hasLocalStore() && !isStorageReadOnly()) await database.purgeExpired();
 }
 
 export function mergeByDayStats({

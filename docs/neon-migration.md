@@ -1,4 +1,4 @@
-# ShipRank storage migration
+# ShipRank Neon storage and migration record
 
 Neon stores the existing key/value payloads in `shiprank_entries`. User token
 ciphertext, stats history, daily token-read audit lists and absolute expiration
@@ -9,10 +9,7 @@ fields instead of copying them into Neon.
 
 ## Configuration
 
-- `SHIPRANK_STORAGE_BACKEND=neon` selects Neon and requires `DATABASE_URL`.
-- `SHIPRANK_STORAGE_BACKEND=redis` explicitly selects the old KV store and requires
-  both `KV_REST_API_URL` and `KV_REST_API_TOKEN`. This is the temporary migration
-  and rollback path, not an automatic fallback.
+- `DATABASE_URL` configures Neon, the only remote storage backend.
 - `SHIPRANK_STORAGE_READ_ONLY=1` pauses all application storage writes. Public
   stats reads continue. OAuth sign-in is declined, refresh lock acquisition
   returns false, and saves fail with a read-only error. Audit appends, lazy token
@@ -21,10 +18,16 @@ fields instead of copying them into Neon.
 - Local development without remote storage configuration still uses the local
   file. `SHIPRANK_USE_LOCAL_STORE=1` forces it, including local previews.
 
-Production fails closed if its backend is missing, unknown or lacks credentials.
+Production fails closed without `DATABASE_URL`.
 Do not set `DATABASE_URL` or any token variable with a `NEXT_PUBLIC_` prefix.
 
-## Cutover
+## Historical cutover
+
+The steps below describe the transition release before the temporary Redis
+adapter and `SHIPRANK_STORAGE_BACKEND` selector were removed. The current app
+cannot select Redis. The importer remains separate from the runtime, and the
+old source and private exports are retained as backups. Restoring those backups
+after Neon has accepted writes requires a write pause and explicit reconciliation.
 
 1. Review and deploy this code with backend `redis` and read-only mode enabled.
    Keep the existing auth secret and token encryption key unchanged.

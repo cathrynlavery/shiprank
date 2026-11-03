@@ -28,7 +28,7 @@ Private repos count toward your total, but their contents stay private:
 
 - Next.js 16 App Router · TypeScript
 - Auth.js v5 (GitHub sign-in, scopes: `read:user user:email`)
-- Neon PostgreSQL (with an explicit Redis path during migration)
+- Neon PostgreSQL
 - GitHub Actions scheduled refreshes every 2 hours from 8 AM to midnight Central
 - SVG share cards with browser-side PNG export, plus `next/og` profile cards
 - Geist + Geist Mono, dark/light mode, no CSS framework
@@ -92,10 +92,9 @@ https://your-deployment.vercel.app/api/auth/callback/github
 
 Remote storage is optional in development. Without remote configuration,
 `npm run dev` stores users, tokens, and stats in `.local-data/shiprank-store.json`.
-To use Neon, set `SHIPRANK_STORAGE_BACKEND=neon` and `DATABASE_URL`.
-Existing local KV credentials also require `SHIPRANK_STORAGE_BACKEND=redis`.
+To use Neon, set `DATABASE_URL`.
 `npm run preview` and `npm run start:local` always use the local store, even
-when KV credentials are present in `.env.local`, by setting
+when a database URL is present in `.env.local`, by setting
 `SHIPRANK_USE_LOCAL_STORE=1`. Delete the local store file to reset local state.
 
 ## Env
@@ -108,15 +107,12 @@ when KV credentials are present in `.env.local`, by setting
 | `GITHUB_APP_SLUG`    | GitHub App slug for repository installation links   |
 | `AUTH_URL`           | Deployed URL (or `http://localhost:3000` in dev)    |
 | `TOKEN_ENCRYPTION_KEY` | Original 32-byte token encryption key; retain during migration |
-| `SHIPRANK_STORAGE_BACKEND` | Explicit `neon` or temporary migration/rollback `redis` |
 | `DATABASE_URL`      | Server-only Neon PostgreSQL connection URL |
 | `SHIPRANK_STORAGE_READ_ONLY` | Set to `1` only during the migration write freeze |
-| `KV_REST_API_URL`    | Required only for the explicit Redis path or importer |
-| `KV_REST_API_TOKEN`  | Required only for the explicit Redis path or importer |
 | `CRON_SECRET`        | Random string used to authorize `/api/cron/refresh` |
 
-See [the Neon migration procedure](docs/neon-migration.md) before switching a
-deployment that already has Redis data. The importer defaults to dry-run,
+The [historical Neon migration procedure](docs/neon-migration.md) and importer
+remain available for the retained Redis backup. The importer defaults to dry-run,
 preserves ciphertext and expirations, and verifies both source stability and
 destination equality before reporting success.
 

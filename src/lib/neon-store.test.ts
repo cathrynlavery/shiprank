@@ -12,7 +12,8 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
 
 describe("Neon storage", () => {
-  it("fails closed when the selected backend has no database URL", async () => {
+  it("fails closed in production without a database URL", async () => {
+    vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("DATABASE_URL", undefined);
     await expect(getValue("user:ada")).rejects.toThrow("DATABASE_URL is required");
     expect(neon).not.toHaveBeenCalled();
