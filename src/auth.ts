@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import { signInWithGithubFullEnabled } from "@/lib/oauth-config";
-import { getUser, saveUser } from "@/lib/store";
+import { getUser, isStorageReadOnly, saveUser } from "@/lib/store";
 import { statsDate } from "@/lib/stats-date";
 
 type GitHubProfile = {
@@ -67,6 +67,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
   callbacks: {
     async signIn({ account, profile, user }) {
+      if (isStorageReadOnly()) return false;
       if (account?.provider !== "github" && account?.provider !== "github-full") {
         return true;
       }

@@ -5,6 +5,7 @@ import { isGitHubRateLimit } from "@/lib/github-token";
 import {
   acquireRefreshLock,
   getUser,
+  isStorageReadOnly,
   releaseRefreshLock,
   saveStats,
   saveUser,
@@ -18,6 +19,13 @@ export async function POST() {
   const username = session?.githubUsername;
   if (!username) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  if (isStorageReadOnly()) {
+    return NextResponse.json(
+      { error: "stats refresh is paused for maintenance. please try again later." },
+      { status: 503 },
+    );
   }
 
   const user = await getUser(username);

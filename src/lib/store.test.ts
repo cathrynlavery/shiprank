@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { kv } from "@vercel/kv";
+import * as database from "@/lib/neon-store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   acquireRefreshLock,
@@ -10,6 +11,9 @@ import {
   getStats,
   getUser,
   isLocalStoreEnabled,
+  isStorageReadOnly,
+  saveCachedCommitStats,
+  saveCachedPrCount,
   mergeByDayStats,
   normalizeStats,
   releaseRefreshLock,
@@ -20,7 +24,12 @@ import { statsDate } from "@/lib/stats-date";
 import type { StatsPayload } from "@/lib/types";
 
 vi.mock("@vercel/kv", () => ({
-  kv: { get: vi.fn(), set: vi.fn() },
+  kv: { get: vi.fn(), set: vi.fn(), scanIterator: vi.fn(), lpush: vi.fn(), expire: vi.fn(), del: vi.fn() },
+}));
+
+vi.mock("@/lib/neon-store", () => ({
+  getValue: vi.fn(), setValue: vi.fn(), listValues: vi.fn(), appendAudit: vi.fn(),
+  acquireLock: vi.fn(), releaseLock: vi.fn(), purgeExpired: vi.fn(),
 }));
 
 function makePeriod(overrides: Partial<StatsPayload["today"]> = {}) {
@@ -380,6 +389,7 @@ describe("development local store", () => {
   it("uses KV with credentials when the local store flag is unset", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("SHIPRANK_USE_LOCAL_STORE", undefined);
+    vi.stubEnv("SHIPRANK_STORAGE_BACKEND", "redis");
     vi.stubEnv("KV_REST_API_URL", "https://kv.example.test");
     vi.stubEnv("KV_REST_API_TOKEN", "test-token");
     expect(isLocalStoreEnabled()).toBe(false);
@@ -444,5 +454,49 @@ describe("development local store", () => {
     await expect(acquireRefreshLock("bo")).resolves.toBe(true);
     await releaseRefreshLock("ada");
     await expect(acquireRefreshLock("ada")).resolves.toBe(true);
+  });
+
+  it("requires explicit production backend selection instead of falling back", async () => {
+    vi.stubEnv("SHIPRANK_USE_LOCAL_STORE", undefined);
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("SHIPRANK_STORAGE_BACKEND", undefined);
+    await expect(getUser("ada")).rejects.toThrow("explicitly select");
+    expect(database.getValue).not.toHaveBeenCalled();
+    expect(kv.get).not.toHaveBeenCalled();
+  });
+
+  it("uses Neon exclusively when selected even if old KV credentials remain", async () => {
+    vi.stubEnv("SHIPRANK_USE_LOCAL_STORE", undefined);
+    vi.stubEnv("SHIPRANK_STORAGE_BACKEND", "neon");
+    vi.stubEnv("DATABASE_URL", "postgres://test:test@db.example.test/shiprank");
+    vi.stubEnv("KV_REST_API_URL", "https://kv.example.test");
+    vi.stubEnv("KV_REST_API_TOKEN", "test-token");
+    const user = { username: "ada", registeredAt: "2026-05-18T00:00:00Z", token: "example-token" };
+    await saveUser(user);
+    const persisted = vi.mocked(database.setValue).mock.calls[0][1] as typeof user;
+    expect(persisted.token).toMatch(/^enc:v1:/);
+    expect(persisted.token).not.toBe(user.token);
+    vi.mocked(database.getValue).mockResolvedValue(persisted);
+    await expect(getUser("ada")).resolves.toMatchObject(user);
+    expect(database.appendAudit).toHaveBeenCalledOnce();
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.set).not.toHaveBeenCalled();
+  });
+
+  it("freezes all storage mutations while keeping existing reads available", async () => {
+    await saveUser({ username: "ada", token: "example-token", registeredAt: "2026-05-18" });
+    const before = await readFile(storePath, "utf8");
+    vi.stubEnv("SHIPRANK_STORAGE_READ_ONLY", "1");
+    expect(isStorageReadOnly()).toBe(true);
+    await expect(getUser("ada")).resolves.toMatchObject({ username: "ada", token: "example-token" });
+    await expect(saveUser({ username: "bo", registeredAt: "2026-05-18" })).rejects.toThrow("read-only");
+    await expect(saveStats(normalizeAt({ username: "ada" }))).rejects.toThrow("read-only");
+    await expect(saveCachedCommitStats("ada/repo", "sha", { additions: 1, deletions: 0 })).rejects.toThrow("read-only");
+    await expect(saveCachedPrCount("ada", "app", "query", 1, 60)).rejects.toThrow("read-only");
+    await expect(acquireRefreshLock("ada")).resolves.toBe(false);
+    await releaseRefreshLock("ada");
+    expect(await readFile(storePath, "utf8")).toBe(before);
+    expect(database.appendAudit).not.toHaveBeenCalled();
+    expect(kv.set).not.toHaveBeenCalled();
   });
 });
