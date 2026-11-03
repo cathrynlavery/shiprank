@@ -59,6 +59,39 @@ After Neon has accepted new writes, switching back blindly can lose those
 updates: pause writes and reconcile them first. This change deletes nothing from
 Redis and does not change Vercel or Neon account settings by itself.
 
+### When Redis reads are blocked by its request quota
+
+A provider RDB export can supply the snapshot without Redis REST requests or a
+paid plan change. Keep the export private (file mode 600, directory mode 700),
+preserve its checksum and load it only into a compatible, isolated Redis process
+with TCP disabled and a private Unix socket. Never restore it into shared Redis,
+change its header to bypass compatibility checks, or print its contents or raw
+loader errors. A private consumer can adapt the export to `sourceSnapshot`, then
+reuse `writeRows` and `sameRows`; the CLI itself still expects Redis REST.
+
+To restore reads while preparing the final write freeze:
+
+1. Verify the immutable export against the isolated rehearsal copy, including
+   every live value and absolute expiration. Preseed the unused production Neon
+   database only after confirming it is empty. Verify that seed against the same
+   export. An export taken before the freeze is a provisional seed, not proof
+   that live-source writes have stopped.
+2. Pause scheduled refresh triggers, retain the original auth secret and token
+   encryption key, and deploy backend `neon` with read-only mode enabled against
+   the seeded production database. Confirm the live leaderboard and owner
+   profile load and the unchanged key decrypts tokens. Keep sign-in and refresh
+   writes paused. This restores reads while the source is quota-blocked.
+3. Confirm the old deployment can no longer start write requests, then drain its
+   in-flight requests for at least 800 seconds. Obtain a fresh provider RDB export
+   after that drain and compare all live values and absolute expirations with
+   the production Neon database. Preserve both datasets and keep read-only mode
+   enabled if any difference appears; reconcile the drift and verify equality
+   before proceeding. Never blindly overwrite conflicting destination rows.
+4. Only after the fresh, frozen-source comparison passes, remove read-only mode
+   and complete the live login/refresh checks from the normal cutover procedure.
+   Preserve Redis and the exports until those checks pass. After Neon accepts
+   writes, the same reconciliation requirement applies to any rollback.
+
 ## Expiration and checks
 
 Expired rows are excluded from every read and lock conflict check. The existing
