@@ -6,6 +6,7 @@ import { ManualRefreshButton } from "@/components/manual-refresh-button";
 import { OAuthStateBanner } from "@/components/oauth-state-banner";
 import { OrgAccessNotice } from "@/components/org-access-notice";
 import { PrivateNamesNotice } from "@/components/private-names-notice";
+import { StarNotice } from "@/components/star-notice";
 import { StatsPage } from "@/components/stats-page";
 import { repoLabelSecret } from "@/lib/crypto";
 import {
@@ -93,7 +94,10 @@ export default async function UserPage({
         }
         ownerTopControls={
           isOwnProfile ? (
-            <ManualRefreshButton autoStart={reconnected === "1"} />
+            <>
+              <ManualRefreshButton autoStart={reconnected === "1"} />
+              <StarNotice />
+            </>
           ) : null
         }
         ownerBottomControls={
