@@ -6,7 +6,7 @@ export default async function ConnectPage() {
   const session = await auth();
   const isAuthenticated = Boolean(session?.githubUsername);
   const connectUrl = githubConnectUrl(isAuthenticated);
-  const label = isAuthenticated ? "manage github access" : "connect with github";
+  const label = isAuthenticated ? "add an org or repos" : "connect with github";
 
   return (
     <main className="wrap">
@@ -83,9 +83,9 @@ export default async function ConnectPage() {
       <section className="section">
         <h2 className="section-head">your control</h2>
         <p className="prose">
-          Start by choosing the repositories ShipRank can read in GitHub. After
-          installation, GitHub returns you to ShipRank to finish sign-in and
-          create your profile.
+          {isAuthenticated
+            ? "Private repos count only in orgs and accounts where the ShipRank GitHub App is installed. To add a new org, or more repos from one you added, pick it on GitHub and choose the repos. GitHub sends you back and your stats recount."
+            : "Start by choosing the repositories ShipRank can read in GitHub. After installation, GitHub returns you to ShipRank to finish sign-in and create your profile. To add another org later, use \"add an org or repos\" on your profile."}
         </p>
       </section>
 

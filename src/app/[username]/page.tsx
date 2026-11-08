@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { FirstRefresh } from "@/components/first-refresh";
 import { ManualRefreshButton } from "@/components/manual-refresh-button";
 import { OAuthStateBanner } from "@/components/oauth-state-banner";
+import { OrgAccessNotice } from "@/components/org-access-notice";
 import { PrivateNamesNotice } from "@/components/private-names-notice";
 import { StatsPage } from "@/components/stats-page";
 import { repoLabelSecret } from "@/lib/crypto";
@@ -97,14 +98,17 @@ export default async function UserPage({
         }
         ownerBottomControls={
           isOwnProfile ? (
-            <OAuthStateBanner
-              enabled={signInWithGithubFullEnabled()}
-              state={oauthState}
-              grantedAt={user?.oauth?.grantedAt}
-              revokedAt={user?.oauth?.revokedAt}
-              settingsUrl={githubFullSettingsUrl()}
-              username={username}
-            />
+            <>
+              <OrgAccessNotice />
+              <OAuthStateBanner
+                enabled={signInWithGithubFullEnabled()}
+                state={oauthState}
+                grantedAt={user?.oauth?.grantedAt}
+                revokedAt={user?.oauth?.revokedAt}
+                settingsUrl={githubFullSettingsUrl()}
+                username={username}
+              />
+            </>
           ) : null
         }
       />
