@@ -165,9 +165,12 @@ async function getMergedPrCount(
   username: string,
   query: string,
   cacheTtlSeconds: number,
+  useCache: boolean,
 ) {
   try {
-    const cached = await getCachedPrCount(username, source, query);
+    const cached = useCache
+      ? await getCachedPrCount(username, source, query)
+      : null;
     if (cached !== null) return cached;
   } catch (error) {
     console.warn("PR count cache read failed", error);
@@ -392,6 +395,7 @@ export async function refreshUserStats(user: StoredUser): Promise<{
       user.username,
       `merged:${today}`,
       LIVE_PR_COUNT_TTL_SECONDS,
+      !fullRefresh,
     ),
     getMergedPrCount(
       collected.token,
@@ -399,6 +403,7 @@ export async function refreshUserStats(user: StoredUser): Promise<{
       user.username,
       `merged:${yesterday}`,
       RECENT_PR_COUNT_TTL_SECONDS,
+      !fullRefresh,
     ),
     getMergedPrCount(
       collected.token,
@@ -406,6 +411,7 @@ export async function refreshUserStats(user: StoredUser): Promise<{
       user.username,
       `merged:>=${weekStartDate}`,
       LIVE_PR_COUNT_TTL_SECONDS,
+      !fullRefresh,
     ),
     getMergedPrCount(
       collected.token,
@@ -413,6 +419,7 @@ export async function refreshUserStats(user: StoredUser): Promise<{
       user.username,
       `merged:>=${SHIPRANK_START_DATE}`,
       LIVE_PR_COUNT_TTL_SECONDS,
+      !fullRefresh,
     ),
   ]);
 
